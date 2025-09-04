@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.utils import timezone
 from django.db import models
 from django.core.validators import MinValueValidator, RegexValidator, MaxValueValidator
@@ -154,6 +155,24 @@ class Producto(models.Model):
         auto_now=True,
         verbose_name="Última modificación"
     )
+    precio_compra = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Precio de Compra",
+        validators=[
+            MinValueValidator(0.01, message="El precio de compra no puede ser menor a $0.01"),
+            MaxValueValidator(5000.00, message="El precio de compra no puede ser mayor a $5,000.00")
+        ],
+        help_text="Precio de compra en dólares",
+        default=0.01
+    )
+    
+    unidad_medida = models.ForeignKey(
+        'UnidadMedida',
+        on_delete=models.PROTECT,
+        verbose_name="Unidad de Medida",
+        help_text="Unidad en la que se vende este producto"
+    )
 
     class Meta:
         verbose_name = "Producto"
@@ -268,6 +287,44 @@ class Producto(models.Model):
             'stock_minimo': cls.STOCK_MINIMO,
             'stock_maximo': cls.STOCK_MAXIMO
         }
+    def get_margen_ganancia(self):
+        """Calcula el margen de ganancia"""
+        if self.precio_compra > 0:
+            margen = ((self.precio - self.precio_compra) / self.precio_compra) * 100
+            return round(margen, 2)
+        return 0
+
+    def get_ganancia_unitaria(self):
+        """Calcula la ganancia por unidad"""
+        return self.precio - self.precio_compra
+
+    def get_precios_formateados_completos(self):
+        """Retorna todos los precios formateados"""
+        tasa_actual = TasaCambio.get_tasa_actual()
+        if tasa_actual:
+            precio_venta_ves = self.precio * tasa_actual.tasa_usd_ves
+            precio_compra_ves = self.precio_compra * tasa_actual.tasa_usd_ves
+        else:
+            precio_venta_ves = 0
+            precio_compra_ves = 0
+            
+        return {
+            'venta_usd': f"${self.precio:,.2f}",
+            'venta_ves': f"{precio_venta_ves:,.2f} Bs",
+            'compra_usd': f"${self.precio_compra:,.2f}",
+            'compra_ves': f"{precio_compra_ves:,.2f} Bs",
+            'margen': f"{self.get_margen_ganancia():.1f}%",
+            'ganancia_usd': f"${self.get_ganancia_unitaria():,.2f}"
+        }
+
+    def validar_cantidad_segun_unidad(self, cantidad):
+        """Valida si la cantidad es correcta según la unidad de medida"""
+        if not self.unidad_medida.permite_decimales:
+            # Si no permite decimales, verificar que sea entero
+            if cantidad != int(cantidad):
+                return False, f"La unidad '{self.unidad_medida.nombre}' no permite cantidades decimales"
+        
+        return True, "OK"
 class Empleado(models.Model):
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, verbose_name='Usuario')
@@ -927,29 +984,6 @@ class DetalleFactura(models.Model):
         # Actualiza el total de la factura
         self.factura.calcular_total()
     
-    """ def save(self, *args, **kwargs):
-        # Verificar si es un nuevo registro
-        es_nuevo = self.pk is None
-        
-        # Si es nuevo, verificar stock antes de guardar
-        if es_nuevo:
-            if not self.validar_stock():
-                raise ValueError(f"Stock insuficiente para {self.producto.nombre}. Disponible: {self.producto.stock}")
-        
-        # Calcula el subtotal antes de guardar
-        self.sub_total = self.calcular_subtotal()
-        
-        # Guardar el detalle
-        super().save(*args, **kwargs)
-        
-        # Actualizar stock si es un nuevo registro
-        if es_nuevo:
-            # Reducir el stock del producto
-            self.producto.stock -= self.cantidad
-            self.producto.save(update_fields=['stock'])
-        
-        # Actualiza el total de la factura
-        self.factura.calcular_total() """
 
     def validar_stock(self):
         """Valida si hay suficiente stock"""
@@ -1034,35 +1068,6 @@ class TablaConfig(models.Model):
             return (monto_venta * self.porcent_comis) / 100
         return 0
     
-
-class TasaCambio(models.Model):
-    fecha = models.DateField(
-        default=timezone.now,
-        verbose_name="Fecha"
-    )
-    tasa_usd_ves = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        verbose_name="Tasa USD a VES",
-        help_text="Bolívares por cada dólar"
-    )
-    activa = models.BooleanField(
-        default=True,
-        verbose_name="Tasa Activa"
-    )
-    fecha_creacion = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="Fecha de Creación"
-    )
-    
-    class Meta:
-        verbose_name = "Tasa de Cambio"
-        verbose_name_plural = "Tasas de Cambio"
-        ordering = ['-fecha', '-fecha_creacion']
-    
-    def __str__(self):
-        return f"1 USD = {self.tasa_usd_ves} VES ({self.fecha})"
-    
     @classmethod
     def get_tasa_actual(cls):
         """Obtiene la tasa de cambio más reciente y activa"""
@@ -1073,3 +1078,118 @@ class TasaCambio(models.Model):
         if self.activa:
             TasaCambio.objects.filter(activa=True).update(activa=False)
         super().save(*args, **kwargs)
+
+class UnidadMedida(models.Model):
+    """
+    Modelo para las unidades de medida de los productos
+    (Kg, gramos, metros, cm, unidades, etc.)
+    """
+    nombre = models.CharField(
+        max_length=30,
+        verbose_name="Nombre",
+        unique=True,
+        help_text="Ejemplo: Kilogramos, Metros, Unidades"
+    )
+    
+    abreviatura = models.CharField(
+        max_length=10,
+        verbose_name="Abreviatura",
+        unique=True,
+        help_text="Ejemplo: kg, m, un, cm, g"
+    )
+    
+    descripcion = models.TextField(
+        max_length=200,
+        verbose_name="Descripción",
+        blank=True,
+        help_text="Descripción detallada de la unidad de medida"
+    )
+    
+    permite_decimales = models.BooleanField(
+        default=True,
+        verbose_name="Permite Decimales",
+        help_text="Si se pueden vender cantidades decimales (ej: 2.5 kg)"
+    )
+    
+    activo = models.BooleanField(
+        default=True,
+        verbose_name="Activo"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de creación"
+    )
+
+    class Meta:
+        verbose_name = "Unidad de Medida"
+        verbose_name_plural = "Unidades de Medida"
+        ordering = ['nombre']
+
+    def __str__(self):
+        return f"{self.nombre} ({self.abreviatura})"
+    
+    def clean(self):
+        """Validaciones personalizadas"""
+        super().clean()
+        
+        # Convertir abreviatura a minúsculas
+        if self.abreviatura:
+            self.abreviatura = self.abreviatura.lower()
+        
+        # Validar que no existan espacios en abreviatura
+        if self.abreviatura and ' ' in self.abreviatura:
+            raise ValidationError({
+                'abreviatura': 'La abreviatura no puede contener espacios'
+            })
+
+class TasaCambio(models.Model):
+    """
+    Modelo para manejar las tasas de cambio USD/VES
+    """
+    fecha = models.DateField(
+        verbose_name="Fecha",
+        unique=True
+    )
+    
+    tasa_usd_ves = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        verbose_name="Tasa USD -> VES",
+        help_text="Cuántos bolívares equivale 1 dólar"
+    )
+    
+    fuente = models.CharField(
+        max_length=50,
+        verbose_name="Fuente",
+        default="BCV",
+        help_text="Fuente de la tasa (BCV, Manual, API)"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de registro"
+    )
+    
+    activo = models.BooleanField(
+        default=True,
+        verbose_name="Activo"
+    )
+
+    class Meta:
+        verbose_name = "Tasa de Cambio"
+        verbose_name_plural = "Tasas de Cambio"
+        ordering = ['-fecha']
+
+    def __str__(self):
+        return f"{self.fecha}: 1 USD = {self.tasa_usd_ves:,.2f} VES"
+    
+    @classmethod
+    def get_tasa_actual(cls):
+        """Obtiene la tasa de cambio más reciente activa"""
+        return cls.objects.filter(activo=True).first()
+    
+    @classmethod
+    def get_tasa_fecha(cls, fecha):
+        """Obtiene la tasa de cambio para una fecha específica"""
+        return cls.objects.filter(fecha=fecha, activo=True).first()

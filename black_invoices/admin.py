@@ -105,10 +105,100 @@ class ComisionAdmin(admin.ModelAdmin):
     list_filter = ('fecha_comision',)
     search_fields = ('empleado__nombre',)
     date_hierarchy = 'fecha_comision'
+@admin.register(UnidadMedida)
+class UnidadMedidaAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'abreviatura', 'permite_decimales', 'activo', 'created_at')
+    list_filter = ('permite_decimales', 'activo')
+    search_fields = ('nombre', 'abreviatura', 'descripcion')
+    ordering = ('nombre',)
+    
+    fieldsets = (
+        ('Información Básica', {
+            'fields': ('nombre', 'abreviatura', 'descripcion')
+        }),
+        ('Configuración', {
+            'fields': ('permite_decimales', 'activo')
+        }),
+    )
 
+@admin.register(TasaCambio)
+class TasaCambioAdmin(admin.ModelAdmin):
+    list_display = ('fecha', 'tasa_usd_ves_formateada', 'fuente', 'activo', 'created_at')
+    list_filter = ('fuente', 'activo', 'fecha')
+    search_fields = ('fecha', 'fuente')
+    ordering = ('-fecha',)
+    date_hierarchy = 'fecha'
+    
+    def tasa_usd_ves_formateada(self, obj):
+        """Muestra la tasa formateada"""
+        return f"1 USD = {obj.tasa_usd_ves:,.4f} VES"
+    tasa_usd_ves_formateada.short_description = 'Tasa de Cambio'
+    
+    # Campos de solo lectura para proteger datos históricos
+    readonly_fields = ('created_at',)
+    
+    fieldsets = (
+        ('Información de la Tasa', {
+            'fields': ('fecha', 'tasa_usd_ves', 'fuente')
+        }),
+        ('Estado', {
+            'fields': ('activo',)
+        }),
+        ('Información del Sistema', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+
+# ==== MODIFICAR EL ProductoAdmin EXISTENTE ====
+# INSTRUCCIONES: 
+# 1. Buscar @admin.register(Producto) en tu admin.py
+# 2. REEMPLAZAR la línea list_display por esta:
+
+    list_display = ('nombre', 'precio_venta_formateado', 'precio_compra_formateado', 'unidad_medida', 'stock', 'activo')
+
+# 3. AGREGAR estos métodos DENTRO de la clase ProductoAdmin:
+
+    def precio_venta_formateado(self, obj):
+        """Muestra el precio de venta formateado"""
+        return f"${obj.precio:,.2f}"
+    precio_venta_formateado.short_description = 'Precio Venta (USD)'
+    
+    def precio_compra_formateado(self, obj):
+        """Muestra el precio de compra formateado"""
+        return f"${obj.precio_compra:,.2f}"
+    precio_compra_formateado.short_description = 'Precio Compra (USD)'
+
+# 4. AGREGAR al final de la clase ProductoAdmin:
+
+    fieldsets = (
+        ('Información Básica', {
+            'fields': ('nombre', 'descripcion', 'unidad_medida')
+        }),
+        ('Precios', {
+            'fields': ('precio_compra', 'precio')
+        }),
+        ('Inventario', {
+            'fields': ('stock', 'activo')
+        }),
+        ('Fechas', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at')
+
+# 5. MODIFICAR list_filter para incluir unidad_medida:
+    list_filter = ('activo', 'unidad_medida')
+
+# 6. MODIFICAR search_fields para mejor búsqueda:
+    search_fields = ('nombre', 'descripcion', 'unidad_medida__nombre')
 # Registros simples para los modelos más básicos
 admin.site.register(NivelAcceso)
 admin.site.register(StatusVentas)
 admin.site.register(TipoFactura)
 admin.site.register(TablaConfig)
 admin.site.register(ConsultaComision)
+admin.site.register(TasaCambio)
+admin.site.register(UnidadMedida)
