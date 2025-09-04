@@ -1,4 +1,4 @@
-# Actualización del admin.py para el modelo Cliente
+# black_invoices/admin.py - VERSIÓN CORREGIDA COMPLETA
 
 from django.contrib import admin
 from .models import *
@@ -74,37 +74,39 @@ class ClienteAdmin(admin.ModelAdmin):
 
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'precio', 'stock', 'activo')
-    list_filter = ('activo',)
-    search_fields = ('nombre', 'descripcion')
-    list_editable = ('precio', 'stock')
+    list_display = ('nombre', 'precio_venta_formateado', 'precio_compra_formateado', 'unidad_medida', 'stock', 'activo')
+    list_filter = ('activo', 'unidad_medida')
+    search_fields = ('nombre', 'descripcion', 'unidad_medida__nombre')
+    list_editable = ('stock',)
+    
+    def precio_venta_formateado(self, obj):
+        """Muestra el precio de venta formateado"""
+        return f"${obj.precio:,.2f}"
+    precio_venta_formateado.short_description = 'Precio Venta (USD)'
+    
+    def precio_compra_formateado(self, obj):
+        """Muestra el precio de compra formateado"""
+        return f"${obj.precio_compra:,.2f}"
+    precio_compra_formateado.short_description = 'Precio Compra (USD)'
 
-@admin.register(Factura)
-class FacturaAdmin(admin.ModelAdmin):
-    list_display = ('id', 'cliente', 'empleado', 'fecha_fac', 'total_fac', 'metodo_pag')
-    list_filter = ('metodo_pag', 'fecha_fac')
-    search_fields = ('cliente__cedula', 'cliente__nombre', 'empleado__nombre')
-    date_hierarchy = 'fecha_fac'
+    fieldsets = (
+        ('Información Básica', {
+            'fields': ('nombre', 'descripcion', 'unidad_medida')
+        }),
+        ('Precios', {
+            'fields': ('precio_compra', 'precio')
+        }),
+        ('Inventario', {
+            'fields': ('stock', 'activo')
+        }),
+        ('Fechas', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at')
 
-@admin.register(DetalleFactura)
-class DetalleFacturaAdmin(admin.ModelAdmin):
-    list_display = ('factura', 'producto', 'cantidad', 'sub_total')
-    list_filter = ('factura', 'producto')
-    search_fields = ('factura__id', 'producto__nombre')
-
-@admin.register(Ventas)
-class VentasAdmin(admin.ModelAdmin):
-    list_display = ('id', 'empleado', 'fecha_venta', 'status')
-    list_filter = ('status', 'fecha_venta')
-    search_fields = ('empleado__nombre',)
-    date_hierarchy = 'fecha_venta'
-
-@admin.register(Comision)
-class ComisionAdmin(admin.ModelAdmin):
-    list_display = ('empleado', 'monto_venta', 'fecha_comision', 'total_comision')
-    list_filter = ('fecha_comision',)
-    search_fields = ('empleado__nombre',)
-    date_hierarchy = 'fecha_comision'
 @admin.register(UnidadMedida)
 class UnidadMedidaAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'abreviatura', 'permite_decimales', 'activo', 'created_at')
@@ -150,55 +152,36 @@ class TasaCambioAdmin(admin.ModelAdmin):
         }),
     )
 
-# ==== MODIFICAR EL ProductoAdmin EXISTENTE ====
-# INSTRUCCIONES: 
-# 1. Buscar @admin.register(Producto) en tu admin.py
-# 2. REEMPLAZAR la línea list_display por esta:
+@admin.register(Factura)
+class FacturaAdmin(admin.ModelAdmin):
+    list_display = ('id', 'cliente', 'empleado', 'fecha_fac', 'total_fac', 'metodo_pag')
+    list_filter = ('metodo_pag', 'fecha_fac')
+    search_fields = ('cliente__cedula', 'cliente__nombre', 'empleado__nombre')
+    date_hierarchy = 'fecha_fac'
 
-    list_display = ('nombre', 'precio_venta_formateado', 'precio_compra_formateado', 'unidad_medida', 'stock', 'activo')
+@admin.register(DetalleFactura)
+class DetalleFacturaAdmin(admin.ModelAdmin):
+    list_display = ('factura', 'producto', 'cantidad', 'sub_total')
+    list_filter = ('factura', 'producto')
+    search_fields = ('factura__id', 'producto__nombre')
 
-# 3. AGREGAR estos métodos DENTRO de la clase ProductoAdmin:
+@admin.register(Ventas)
+class VentasAdmin(admin.ModelAdmin):
+    list_display = ('id', 'empleado', 'fecha_venta', 'status')
+    list_filter = ('status', 'fecha_venta')
+    search_fields = ('empleado__nombre',)
+    date_hierarchy = 'fecha_venta'
 
-    def precio_venta_formateado(self, obj):
-        """Muestra el precio de venta formateado"""
-        return f"${obj.precio:,.2f}"
-    precio_venta_formateado.short_description = 'Precio Venta (USD)'
-    
-    def precio_compra_formateado(self, obj):
-        """Muestra el precio de compra formateado"""
-        return f"${obj.precio_compra:,.2f}"
-    precio_compra_formateado.short_description = 'Precio Compra (USD)'
+@admin.register(Comision)
+class ComisionAdmin(admin.ModelAdmin):
+    list_display = ('empleado', 'monto_venta', 'fecha_comision', 'total_comision')
+    list_filter = ('fecha_comision',)
+    search_fields = ('empleado__nombre',)
+    date_hierarchy = 'fecha_comision'
 
-# 4. AGREGAR al final de la clase ProductoAdmin:
-
-    fieldsets = (
-        ('Información Básica', {
-            'fields': ('nombre', 'descripcion', 'unidad_medida')
-        }),
-        ('Precios', {
-            'fields': ('precio_compra', 'precio')
-        }),
-        ('Inventario', {
-            'fields': ('stock', 'activo')
-        }),
-        ('Fechas', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
-    
-    readonly_fields = ('created_at', 'updated_at')
-
-# 5. MODIFICAR list_filter para incluir unidad_medida:
-    list_filter = ('activo', 'unidad_medida')
-
-# 6. MODIFICAR search_fields para mejor búsqueda:
-    search_fields = ('nombre', 'descripcion', 'unidad_medida__nombre')
 # Registros simples para los modelos más básicos
 admin.site.register(NivelAcceso)
 admin.site.register(StatusVentas)
 admin.site.register(TipoFactura)
 admin.site.register(TablaConfig)
 admin.site.register(ConsultaComision)
-admin.site.register(TasaCambio)
-admin.site.register(UnidadMedida)

@@ -171,7 +171,9 @@ class Producto(models.Model):
         'UnidadMedida',
         on_delete=models.PROTECT,
         verbose_name="Unidad de Medida",
-        help_text="Unidad en la que se vende este producto"
+        help_text="Unidad en la que se vende este producto",
+        null=True,      # Permitir nulos temporalmente
+        blank=True      # Permitir vacío en formularios
     )
 
     class Meta:
