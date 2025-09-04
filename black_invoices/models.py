@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 
 # Create your models here.
 class NivelAcceso(models.Model):
-    nombre = models.CharField(max_length=20)
+    nombre = models.CharField(max_length=50)
     descripcion = models.CharField(max_length=100)
 
     class Meta:
@@ -110,7 +110,7 @@ class Producto(models.Model):
     STOCK_MAXIMO = 100000
 
     nombre = models.CharField(
-        max_length=20,
+        max_length=50,
         verbose_name="Nombre",
         unique=True
     )
@@ -327,6 +327,34 @@ class Producto(models.Model):
                 return False, f"La unidad '{self.unidad_medida.nombre}' no permite cantidades decimales"
         
         return True, "OK"
+    def get_precio_con_iva(self):
+        """Calcula el precio con IVA incluido"""
+        config = ConfiguracionSistema.get_config()
+        iva = config.calcular_iva(self.precio)
+        return self.precio + iva
+    
+    def get_precios_iva_formateados(self):
+        """Retorna precios con y sin IVA en ambas monedas"""
+        config = ConfiguracionSistema.get_config()
+        tasa_actual = TasaCambio.get_tasa_actual()
+        
+        # Precios sin IVA
+        precio_sin_iva_usd = self.precio
+        precio_con_iva_usd = self.get_precio_con_iva()
+        
+        if tasa_actual:
+            precio_sin_iva_ves = precio_sin_iva_usd * tasa_actual.tasa_usd_ves
+            precio_con_iva_ves = precio_con_iva_usd * tasa_actual.tasa_usd_ves
+        else:
+            precio_sin_iva_ves = precio_con_iva_ves = 0
+        
+        return {
+            'sin_iva_usd': f"${precio_sin_iva_usd:,.2f}",
+            'sin_iva_ves': f"{precio_sin_iva_ves:,.2f} Bs",
+            'con_iva_usd': f"${precio_con_iva_usd:,.2f}",
+            'con_iva_ves': f"{precio_con_iva_ves:,.2f} Bs",
+            'iva_porcentaje': config.porcentaje_iva
+        }
 class Empleado(models.Model):
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, verbose_name='Usuario')
@@ -894,6 +922,26 @@ class Factura(models.Model):
         verbose_name="Total de Venta",
         default=0
     )
+    numero_factura = models.PositiveIntegerField(
+        verbose_name="Número de Factura",
+        unique=True,
+        null=True,  # Temporal para migración
+        blank=True
+    )
+    
+    subtotal = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Subtotal (sin IVA)",
+        default=0
+    )
+    
+    iva = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="IVA",
+        default=0
+    )
 
     class Meta:
         verbose_name = "Factura"
@@ -939,6 +987,65 @@ class Factura(models.Model):
         )
         self.calcular_total()
         return detalle
+    def save(self, *args, **kwargs):
+        # Asignar número de factura si no tiene
+        if not self.numero_factura:
+            config = ConfiguracionSistema.get_config()
+            self.numero_factura = config.get_siguiente_numero_factura()
+        
+        super().save(*args, **kwargs)
+    
+    def calcular_total_mejorado(self):
+        """
+        Calcula totales con IVA incluido
+        """
+        config = ConfiguracionSistema.get_config()
+        
+        # Calcular subtotal (sin IVA)
+        subtotal = self.detallefactura_set.aggregate(
+            total=models.Sum(models.F('cantidad') * models.F('producto__precio'))
+        )['total'] or 0
+        
+        # Calcular IVA
+        iva = config.calcular_iva(subtotal)
+        
+        # Calcular total
+        total = subtotal + iva
+        
+        # Actualizar campos
+        self.subtotal = subtotal
+        self.iva = iva
+        self.total_fac = total
+        self.total_venta = total
+        
+        self.save(update_fields=['subtotal', 'iva', 'total_fac', 'total_venta'])
+        
+        return {
+            'subtotal': subtotal,
+            'iva': iva,
+            'total': total
+        }
+    
+    def get_totales_formateados(self):
+        """Retorna totales en USD y VES formateados"""
+        tasa_actual = TasaCambio.get_tasa_actual()
+        
+        if tasa_actual:
+            subtotal_ves = self.subtotal * tasa_actual.tasa_usd_ves
+            iva_ves = self.iva * tasa_actual.tasa_usd_ves
+            total_ves = self.total_fac * tasa_actual.tasa_usd_ves
+        else:
+            subtotal_ves = iva_ves = total_ves = 0
+        
+        return {
+            'subtotal_usd': f"${self.subtotal:,.2f}",
+            'subtotal_ves': f"{subtotal_ves:,.2f} Bs",
+            'iva_usd': f"${self.iva:,.2f}",
+            'iva_ves': f"{iva_ves:,.2f} Bs",
+            'total_usd': f"${self.total_fac:,.2f}",
+            'total_ves': f"{total_ves:,.2f} Bs",
+            'tasa_cambio': tasa_actual.tasa_usd_ves if tasa_actual else 1
+        }
     
 class DetalleFactura(models.Model):
     factura = models.ForeignKey(
@@ -980,11 +1087,12 @@ class DetalleFactura(models.Model):
         return f"Detalle #{self.id} - Factura #{self.factura.id}"
 
     def save(self, *args, **kwargs):
-        # Calcula el subtotal antes de guardar
-        self.sub_total = self.calcular_subtotal()
+        # Calcular subtotal de la línea
+        self.sub_total = self.cantidad * self.producto.precio
         super().save(*args, **kwargs)
-        # Actualiza el total de la factura
-        self.factura.calcular_total()
+        
+        # Actualizar totales de la factura con IVA
+        self.factura.calcular_total_mejorado()
     
 
     def validar_stock(self):
@@ -1195,3 +1303,301 @@ class TasaCambio(models.Model):
     def get_tasa_fecha(cls, fecha):
         """Obtiene la tasa de cambio para una fecha específica"""
         return cls.objects.filter(fecha=fecha, activo=True).first()
+    
+    def save(self, *args, **kwargs):
+        """Al guardar una tasa activa, desactivar las demás"""
+        if self.activo:
+            # Desactivar todas las demás tasas
+            TasaCambio.objects.filter(activo=True).update(activo=False)
+        super().save(*args, **kwargs)
+
+class ConfiguracionSistema(models.Model):
+    """
+    Configuración general del sistema (IVA, empresa, etc.)
+    """
+    
+    # Información de la empresa
+    nombre_empresa = models.CharField(
+        max_length=100,
+        verbose_name="Nombre de la Empresa",
+        default="Corporación Agrícola Doña Clara"
+    )
+    
+    rif_empresa = models.CharField(
+        max_length=20,
+        verbose_name="RIF de la Empresa",
+        help_text="Ejemplo: J-12345678-9"
+    )
+    
+    direccion_empresa = models.TextField(
+        verbose_name="Dirección de la Empresa",
+        max_length=300
+    )
+    
+    telefono_empresa = models.CharField(
+        max_length=20,
+        verbose_name="Teléfono"
+    )
+    
+    # Configuración de IVA
+    porcentaje_iva = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        verbose_name="Porcentaje de IVA",
+        default=16.00,
+        help_text="Porcentaje de IVA aplicable (16% por defecto)"
+    )
+    
+    aplicar_iva = models.BooleanField(
+        default=True,
+        verbose_name="Aplicar IVA",
+        help_text="Si se debe aplicar IVA a las ventas"
+    )
+    
+    # Numeración de documentos
+    numero_factura_actual = models.PositiveIntegerField(
+        default=1,
+        verbose_name="Número de Factura Actual",
+        help_text="Próximo número de factura a generar"
+    )
+    
+    numero_nota_entrega_actual = models.PositiveIntegerField(
+        default=1,
+        verbose_name="Número de Nota de Entrega Actual",
+        help_text="Próximo número de nota de entrega a generar"
+    )
+    
+    # API de tasa de cambio
+    api_tasa_activa = models.BooleanField(
+        default=True,
+        verbose_name="API de Tasa Activa",
+        help_text="Si debe actualizarse automáticamente la tasa de cambio"
+    )
+    
+    api_tasa_url = models.URLField(
+        default="https://api.exchangerate-api.com/v4/latest/USD",
+        verbose_name="URL de API de Tasa",
+        help_text="URL para obtener la tasa de cambio"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de creación"
+    )
+    
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Última actualización"
+    )
+
+    class Meta:
+        verbose_name = "Configuración del Sistema"
+        verbose_name_plural = "Configuración del Sistema"
+
+    def __str__(self):
+        return f"Configuración - {self.nombre_empresa}"
+    
+    @classmethod
+    def get_config(cls):
+        """Obtiene la configuración actual (singleton)"""
+        config, created = cls.objects.get_or_create(
+            pk=1,
+            defaults={
+                'nombre_empresa': 'Corporación Agrícola Doña Clara',
+                'rif_empresa': 'J-00000000-0',
+                'direccion_empresa': 'Mangueras y Conexiones Hidráulicas',
+                'telefono_empresa': '0000-000-0000',
+            }
+        )
+        return config
+    
+    def calcular_iva(self, monto_base):
+        """Calcula el IVA de un monto base"""
+        if self.aplicar_iva:
+            return (monto_base * self.porcentaje_iva) / 100
+        return 0
+    
+    def calcular_total_con_iva(self, monto_base):
+        """Calcula el total incluyendo IVA"""
+        iva = self.calcular_iva(monto_base)
+        return monto_base + iva
+    
+    def get_siguiente_numero_factura(self):
+        """Obtiene y actualiza el siguiente número de factura"""
+        numero = self.numero_factura_actual
+        self.numero_factura_actual += 1
+        self.save(update_fields=['numero_factura_actual'])
+        return numero
+    
+    def get_siguiente_numero_nota_entrega(self):
+        """Obtiene y actualiza el siguiente número de nota de entrega"""
+        numero = self.numero_nota_entrega_actual
+        self.numero_nota_entrega_actual += 1
+        self.save(update_fields=['numero_nota_entrega_actual'])
+        return numero
+
+class NotaEntrega(models.Model):
+    """
+    Modelo para notas de entrega (ventas a crédito)
+    """
+    numero_nota = models.PositiveIntegerField(
+        verbose_name="Número de Nota",
+        unique=True
+    )
+    
+    cliente = models.ForeignKey(
+        'Cliente',
+        on_delete=models.PROTECT,
+        verbose_name="Cliente",
+        related_name='notas_entrega'
+    )
+    
+    empleado = models.ForeignKey(
+        'Empleado',
+        on_delete=models.PROTECT,
+        verbose_name="Empleado",
+        related_name='notas_entrega_generadas'
+    )
+    
+    fecha_nota = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de Nota"
+    )
+    
+    subtotal = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Subtotal (sin IVA)",
+        default=0
+    )
+    
+    iva = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="IVA",
+        default=0
+    )
+    
+    total = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Total con IVA",
+        default=0
+    )
+    
+    monto_pagado = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Monto Pagado",
+        default=0
+    )
+    
+    observaciones = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Observaciones"
+    )
+    
+    convertida_a_factura = models.BooleanField(
+        default=False,
+        verbose_name="Convertida a Factura"
+    )
+    
+    factura_generada = models.OneToOneField(
+        'Factura',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Factura Generada",
+        related_name='nota_entrega_origen'
+    )
+
+    class Meta:
+        verbose_name = "Nota de Entrega"
+        verbose_name_plural = "Notas de Entrega"
+        ordering = ['-fecha_nota']
+
+    def __str__(self):
+        return f"Nota #{self.numero_nota} - {self.cliente.nombre}"
+    
+    @property
+    def saldo_pendiente(self):
+        """Calcula el saldo pendiente de pago"""
+        return self.total - self.monto_pagado
+    
+    @property
+    def esta_pagada(self):
+        """Verifica si la nota está completamente pagada"""
+        return self.monto_pagado >= self.total
+    
+    def calcular_totales(self):
+        """Calcula subtotal, IVA y total basado en los detalles"""
+        config = ConfiguracionSistema.get_config()
+        
+        # Calcular subtotal
+        self.subtotal = self.detalles_nota.aggregate(
+            total=models.Sum(models.F('cantidad') * models.F('precio_unitario'))
+        )['total'] or 0
+        
+        # Calcular IVA
+        self.iva = config.calcular_iva(self.subtotal)
+        
+        # Calcular total
+        self.total = self.subtotal + self.iva
+        
+        self.save(update_fields=['subtotal', 'iva', 'total'])
+        return {'subtotal': self.subtotal, 'iva': self.iva, 'total': self.total}
+
+class DetalleNotaEntrega(models.Model):
+    """
+    Detalles de una nota de entrega
+    """
+    nota_entrega = models.ForeignKey(
+        'NotaEntrega',
+        on_delete=models.CASCADE,
+        verbose_name="Nota de Entrega",
+        related_name='detalles_nota'
+    )
+    
+    producto = models.ForeignKey(
+        'Producto',
+        on_delete=models.PROTECT,
+        verbose_name="Producto"
+    )
+    
+    cantidad = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        verbose_name="Cantidad",
+        validators=[MinValueValidator(0.001)]
+    )
+    
+    precio_unitario = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Precio Unitario",
+        validators=[MinValueValidator(0.01)]
+    )
+    
+    subtotal_linea = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Subtotal",
+        editable=False
+    )
+
+    class Meta:
+        verbose_name = "Detalle de Nota de Entrega"
+        verbose_name_plural = "Detalles de Nota de Entrega"
+        ordering = ['producto__nombre']
+
+    def __str__(self):
+        return f"{self.producto.nombre} - {self.cantidad} {self.producto.unidad_medida.abreviatura}"
+    
+    def save(self, *args, **kwargs):
+        # Calcular subtotal de la línea
+        self.subtotal_linea = self.cantidad * self.precio_unitario
+        super().save(*args, **kwargs)
+        
+        # Actualizar totales de la nota
+        self.nota_entrega.calcular_totales()

@@ -152,12 +152,12 @@ class TasaCambioAdmin(admin.ModelAdmin):
         }),
     )
 
-@admin.register(Factura)
+""" @admin.register(Factura)
 class FacturaAdmin(admin.ModelAdmin):
     list_display = ('id', 'cliente', 'empleado', 'fecha_fac', 'total_fac', 'metodo_pag')
     list_filter = ('metodo_pag', 'fecha_fac')
     search_fields = ('cliente__cedula', 'cliente__nombre', 'empleado__nombre')
-    date_hierarchy = 'fecha_fac'
+    date_hierarchy = 'fecha_fac' """
 
 @admin.register(DetalleFactura)
 class DetalleFacturaAdmin(admin.ModelAdmin):
@@ -185,3 +185,137 @@ admin.site.register(StatusVentas)
 admin.site.register(TipoFactura)
 admin.site.register(TablaConfig)
 admin.site.register(ConsultaComision)
+
+@admin.register(ConfiguracionSistema)
+class ConfiguracionSistemaAdmin(admin.ModelAdmin):
+    list_display = ('nombre_empresa', 'porcentaje_iva', 'aplicar_iva', 'api_tasa_activa', 'updated_at')
+    
+    fieldsets = (
+        ('Información de la Empresa', {
+            'fields': ('nombre_empresa', 'rif_empresa', 'direccion_empresa', 'telefono_empresa')
+        }),
+        ('Configuración de IVA', {
+            'fields': ('aplicar_iva', 'porcentaje_iva')
+        }),
+        ('Numeración de Documentos', {
+            'fields': ('numero_factura_actual', 'numero_nota_entrega_actual'),
+            'classes': ('collapse',)
+        }),
+        ('API de Tasa de Cambio', {
+            'fields': ('api_tasa_activa', 'api_tasa_url'),
+            'classes': ('collapse',)
+        }),
+        ('Fechas del Sistema', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at')
+    
+    def has_add_permission(self, request):
+        # Solo permitir una configuración
+        return not ConfiguracionSistema.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        # No permitir eliminar la configuración
+        return False
+
+@admin.register(NotaEntrega)
+class NotaEntregaAdmin(admin.ModelAdmin):
+    list_display = ('numero_nota', 'cliente', 'empleado', 'fecha_nota', 'total_formateado', 'saldo_pendiente_formateado', 'convertida_a_factura')
+    list_filter = ('convertida_a_factura', 'fecha_nota', 'empleado')
+    search_fields = ('numero_nota', 'cliente__nombre', 'cliente__cedula')
+    date_hierarchy = 'fecha_nota'
+    ordering = ('-numero_nota',)
+    
+    fieldsets = (
+        ('Información Básica', {
+            'fields': ('numero_nota', 'cliente', 'empleado')
+        }),
+        ('Totales', {
+            'fields': ('subtotal', 'iva', 'total', 'monto_pagado')
+        }),
+        ('Estado', {
+            'fields': ('observaciones', 'convertida_a_factura', 'factura_generada')
+        }),
+    )
+    
+    readonly_fields = ('numero_nota', 'subtotal', 'iva', 'total')
+    
+    def total_formateado(self, obj):
+        """Muestra el total formateado"""
+        return f"${obj.total:,.2f}"
+    total_formateado.short_description = 'Total'
+    
+    def saldo_pendiente_formateado(self, obj):
+        """Muestra el saldo pendiente formateado"""
+        saldo = obj.saldo_pendiente
+        if saldo > 0:
+            return f"${saldo:,.2f}"
+        return "PAGADO"
+    saldo_pendiente_formateado.short_description = 'Saldo Pendiente'
+    
+    def save_model(self, request, obj, form, change):
+        if not obj.numero_nota:
+            config = ConfiguracionSistema.get_config()
+            obj.numero_nota = config.get_siguiente_numero_nota_entrega()
+        super().save_model(request, obj, form, change)
+
+@admin.register(DetalleNotaEntrega)
+class DetalleNotaEntregaAdmin(admin.ModelAdmin):
+    list_display = ('nota_entrega', 'producto', 'cantidad', 'precio_unitario_formateado', 'subtotal_linea_formateado')
+    list_filter = ('nota_entrega', 'producto')
+    search_fields = ('nota_entrega__numero_nota', 'producto__nombre')
+    
+    def precio_unitario_formateado(self, obj):
+        return f"${obj.precio_unitario:,.2f}"
+    precio_unitario_formateado.short_description = 'Precio Unit.'
+    
+    def subtotal_linea_formateado(self, obj):
+        return f"${obj.subtotal_linea:,.2f}"
+    subtotal_linea_formateado.short_description = 'Subtotal'
+
+# ==== MODIFICAR FacturaAdmin EXISTENTE ====
+# Reemplazar la configuración del FacturaAdmin con esta versión mejorada:
+
+@admin.register(Factura)
+class FacturaAdmin(admin.ModelAdmin):
+    list_display = ('numero_factura_display', 'cliente', 'empleado', 'fecha_fac', 'subtotal_formateado', 'iva_formateado', 'total_formateado', 'metodo_pag')
+    list_filter = ('metodo_pag', 'fecha_fac')
+    search_fields = ('numero_factura', 'cliente__cedula', 'cliente__nombre', 'empleado__nombre')
+    date_hierarchy = 'fecha_fac'
+    ordering = ('-numero_factura',)
+    
+    fieldsets = (
+        ('Información Básica', {
+            'fields': ('numero_factura', 'cliente', 'empleado', 'metodo_pag')
+        }),
+        ('Totales', {
+            'fields': ('subtotal', 'iva', 'total_fac', 'total_venta')
+        }),
+    )
+    
+    readonly_fields = ('numero_factura', 'subtotal', 'iva', 'total_fac', 'total_venta')
+    
+    def numero_factura_display(self, obj):
+        return f"#{obj.numero_factura}" if obj.numero_factura else "Sin número"
+    numero_factura_display.short_description = 'N° Factura'
+    
+    def subtotal_formateado(self, obj):
+        return f"${obj.subtotal:,.2f}"
+    subtotal_formateado.short_description = 'Subtotal'
+    
+    def iva_formateado(self, obj):
+        return f"${obj.iva:,.2f}"
+    iva_formateado.short_description = 'IVA'
+    
+    def total_formateado(self, obj):
+        return f"${obj.total_fac:,.2f}"
+    total_formateado.short_description = 'Total'
+    
+    def save_model(self, request, obj, form, change):
+        if not obj.numero_factura:
+            config = ConfiguracionSistema.get_config()
+            obj.numero_factura = config.get_siguiente_numero_factura()
+        super().save_model(request, obj, form, change)
