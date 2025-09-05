@@ -563,11 +563,11 @@ class Ventas(models.Model):
         null=True,
         verbose_name="Comentarios de Autorización"
     )
-    requiere_autorizacion = models.BooleanField(default=True, verbose_name="Requiere Autorización")
-    autorizada = models.BooleanField(default=False, verbose_name="Venta Autorizada")
-    autorizada_por = models.ForeignKey('Empleado', on_delete=models.SET_NULL, null=True, blank=True, related_name='ventas_autorizadas', verbose_name="Autorizada por")
-    fecha_autorizacion = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de Autorización")
-    comentarios_autorizacion = models.TextField(blank=True, null=True, verbose_name="Comentarios de Autorización")
+    # requiere_autorizacion = models.BooleanField(default=True, verbose_name="Requiere Autorización")
+    # autorizada = models.BooleanField(default=False, verbose_name="Venta Autorizada")
+    # autorizada_por = models.ForeignKey('Empleado', on_delete=models.SET_NULL, null=True, blank=True, related_name='ventas_autorizadas', verbose_name="Autorizada por")
+    # fecha_autorizacion = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de Autorización")
+    # comentarios_autorizacion = models.TextField(blank=True, null=True, verbose_name="Comentarios de Autorización")
     
     class Meta:
         verbose_name = "Venta"
@@ -1178,16 +1178,16 @@ class TablaConfig(models.Model):
             return (monto_venta * self.porcent_comis) / 100
         return 0
     
-    @classmethod
-    def get_tasa_actual(cls):
-        """Obtiene la tasa de cambio más reciente y activa"""
-        return cls.objects.filter(activa=True).first()
+    # @classmethod
+    # def get_tasa_actual(cls):
+    #     """Obtiene la tasa de cambio más reciente y activa"""
+    #     return cls.objects.filter(activa=True).first()
     
-    def save(self, *args, **kwargs):
-        # Si esta tasa se marca como activa, desactivar las demás
-        if self.activa:
-            TasaCambio.objects.filter(activa=True).update(activa=False)
-        super().save(*args, **kwargs)
+    # def save(self, *args, **kwargs):
+    #     # Si esta tasa se marca como activa, desactivar las demás
+    #     if self.activa:
+    #         TasaCambio.objects.filter(activa=True).update(activa=False)
+    #     super().save(*args, **kwargs)
 
 class UnidadMedida(models.Model):
     """
