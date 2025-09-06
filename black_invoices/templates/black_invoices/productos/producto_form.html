@@ -40,15 +40,36 @@
             </div>
 
             <div class="row">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <div class="form-group">
-                        <label for="{{ form.stock.id_for_label }}">Stock:</label>
+                        <label for="{{ form.unidad_medida.id_for_label }}">{{ form.unidad_medida.label }}:</label>
+                        {{ form.unidad_medida }}
+                        {% if form.unidad_medida.errors %}
+                            <div class="text-danger">{{ form.unidad_medida.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="{{ form.precio_compra.id_for_label }}">{{ form.precio_compra.label }}:</label>
+                        {{ form.precio_compra }}
+                        {% if form.precio_compra.errors %}
+                            <div class="text-danger">{{ form.precio_compra.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="{{ form.stock.id_for_label }}">{{ form.stock.label }}:</label>
                         {{ form.stock }}
                         {% if form.stock.errors %}
                             <div class="text-danger">{{ form.stock.errors }}</div>
                         {% endif %}
                     </div>
                 </div>
+            </div>
+            
+            <div class="row">
                 <div class="col-md-6">
                     <div class="form-check">
                         {{ form.activo }}

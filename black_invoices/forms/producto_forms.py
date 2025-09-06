@@ -33,7 +33,8 @@ class ProductoForm(forms.ModelForm):
             'stock': forms.NumberInput(attrs={
                 'class': 'form-control', 
                 'min': '0',
-                'placeholder': 'Cantidad en inventario'
+                'step': '0.001',
+                'placeholder': 'Cantidad en inventario (ej: 25.5)'
             }),
             'activo': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'

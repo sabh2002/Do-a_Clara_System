@@ -10,6 +10,7 @@ from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DetailView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
 
 from black_invoices.forms.user_profile_form import UserProfileForm
 from .models import *
@@ -323,6 +324,12 @@ class ProductoDetailView(LoginRequiredMixin, DetailView):
             producto=self.object
         ).order_by('-factura__fecha_fac')[:10]  # Últimas 10 ventas
         
+        # Información adicional del producto con nuevos campos
+        context['precios_formateados'] = self.object.get_precios_formateados_completos()
+        context['precios_iva'] = self.object.get_precios_iva_formateados()
+        context['stock_status'] = self.object.get_stock_status()
+        context['margen_ganancia'] = self.object.get_margen_ganancia()
+        
         return context
 
 class ProductoUpdateView(LoginRequiredMixin, UpdateView):
@@ -512,11 +519,26 @@ class FacturaDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         factura = self.get_object()
-        # El modelo Factura tiene un método get_detalles()
-        # que retorna DetalleFactura.objects.filter(factura=self)
-        # Lo usamos para cargar los detalles.
+        
+        # Detalles de la factura
         context['detalles'] = factura.get_detalles().order_by('id') 
-        context['titulo'] = f'Detalle de Factura N° {factura.id}' # Título para la página
+        context['titulo'] = f'Detalle de Factura N° {factura.numero_factura or factura.id}'
+        
+        # Información de totales con IVA
+        context['totales_formateados'] = factura.get_totales_formateados()
+        
+        # Configuración del sistema para mostrar IVA
+        config = ConfiguracionSistema.get_config()
+        context['config_sistema'] = config
+        
+        # Información de la venta asociada (si existe)
+        try:
+            venta = factura.ventas
+            context['venta'] = venta
+            context['estado_autorizacion'] = venta.estado_autorizacion
+        except:
+            context['venta'] = None
+        
         return context
 
 def ingresar(request):
@@ -606,7 +628,7 @@ from django.contrib import messages
                                 tipo_factura = TipoFactura.objects.get(pk=2 if es_credito else 1)
                                 
                                 producto = Producto.objects.get(pk=producto_id)
-                                cantidad = int(cantidad_str)
+                                cantidad = Decimal(str(cantidad_str))
                                 
                                 # Verificar stock
                                 if cantidad > producto.stock:
@@ -742,11 +764,16 @@ class VentaCreateView(LoginRequiredMixin, View):
                     producto_id = request.POST.get(f'form-{i}-producto')
                     cantidad_str = request.POST.get(f'form-{i}-cantidad')
                     
-                    if producto_id and cantidad_str and cantidad_str.isdigit():
-                        productos.append({
-                            'id': producto_id,
-                            'cantidad': int(cantidad_str)
-                        })
+                    if producto_id and cantidad_str:
+                        try:
+                            cantidad = float(cantidad_str)
+                            if cantidad > 0:
+                                productos.append({
+                                    'id': producto_id,
+                                    'cantidad': cantidad
+                                })
+                        except ValueError:
+                            continue  # Ignorar cantidades inválidas
                 
                 if not productos:
                     messages.error(request, 'Debe agregar al menos un producto a la venta.')
@@ -764,18 +791,29 @@ class VentaCreateView(LoginRequiredMixin, View):
                 # 5. Procesar los productos
                 total_factura = 0
                 es_credito = request.POST.get('tipo_venta') == 'credito'
-                tipo_factura = TipoFactura.objects.get(credito_fac=es_credito)
+                
+                # Obtener o crear el tipo de factura
+                try:
+                    tipo_factura = TipoFactura.objects.get(credito_fac=es_credito, contado_fac=not es_credito)
+                except TipoFactura.DoesNotExist:
+                    # Crear el tipo de factura si no existe
+                    tipo_factura = TipoFactura.objects.create(
+                        credito_fac=es_credito,
+                        contado_fac=not es_credito,
+                        plazo_credito=30 if es_credito else None
+                    )
                 
                 for prod in productos:
                     try:
                         producto = Producto.objects.get(pk=prod['id'])
-                        cantidad = prod['cantidad']
+                        cantidad = Decimal(str(prod['cantidad']))  # Convertir a Decimal desde el inicio
                         
-                        # Verificar stock
+                        # Solo verificar disponibilidad - NO DESCONTAR STOCK AÚN
+                        # El stock se descontará cuando se autorice la venta
                         if cantidad > producto.stock:
                             raise ValueError(f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}")
                         
-                        # Calcular subtotal
+                        # Calcular subtotal (ambos son Decimal ahora)
                         subtotal = producto.precio * cantidad
                         total_factura += subtotal
                         
@@ -789,43 +827,52 @@ class VentaCreateView(LoginRequiredMixin, View):
                         )
                         detalle.save()
                         
-                        # Reducir stock
-                        producto.stock -= cantidad
-                        producto.save(update_fields=['stock'])
+                        # *** NO DESCONTAMOS STOCK AQUÍ - se hará en la autorización ***
                         
                     except Producto.DoesNotExist:
                         raise ValueError(f"El producto con ID {prod['id']} no existe.")
                 
-                # 6. Actualizar el total de la factura
-                factura.total_fac = total_factura
-                factura.total_venta = total_factura
-                factura.save()
+                # 6. Actualizar el total de la factura usando calcular_total_mejorado
+                factura.calcular_total_mejorado()
                 
-                # 7. Crear la venta
-                if es_credito:
-                    estado = StatusVentas.objects.get(nombre="Pendiente")
-                else:
-                    estado = StatusVentas.objects.get(nombre="Completada")
+                # 7. Crear la venta con sistema de autorización
+                # TODAS las ventas inician como "Pendiente de Autorización"
+                try:
+                    estado_pendiente_autorizacion = StatusVentas.objects.get(nombre="Pendiente de Autorización")
+                except StatusVentas.DoesNotExist:
+                    # Si no existe, crear el estado
+                    estado_pendiente_autorizacion = StatusVentas.objects.create(
+                        nombre="Pendiente de Autorización",
+                        vent_espera=True,
+                        vent_cancelada=False
+                    )
                 
                 venta = Ventas.objects.create(
                     empleado=factura.empleado,
                     factura=factura,
-                    status=estado,
+                    status=estado_pendiente_autorizacion,
                     credito=es_credito,
-                    monto_pagado=0 if es_credito else factura.total_fac
+                    monto_pagado=0,  # Nunca se paga hasta que se autorice
+                    requiere_autorizacion=True,
+                    autorizada=False
                 )
                 
-                # 8. Mensaje de éxito con información en ambas monedas
+                # 8. Mensaje de éxito con información de autorización requerida
                 tasa_actual = TasaCambio.get_tasa_actual()
                 if tasa_actual:
-                    total_bs = total_factura * tasa_actual.tasa_usd_ves
+                    total_bs = factura.total_fac * tasa_actual.tasa_usd_ves
                     messages.success(
                         request, 
                         f'Venta {"a crédito " if es_credito else ""}#{venta.id} creada exitosamente. '
-                        f'Total: ${total_factura:,.2f} ({total_bs:,.2f} Bs)'
+                        f'Total: ${factura.total_fac:,.2f} ({total_bs:,.2f} Bs). '
+                        f'⚠️ REQUIERE AUTORIZACIÓN para proceder.'
                     )
                 else:
-                    messages.success(request, f'Venta {"a crédito " if es_credito else ""}#{venta.id} creada exitosamente.')
+                    messages.success(
+                        request, 
+                        f'Venta {"a crédito " if es_credito else ""}#{venta.id} creada exitosamente. '
+                        f'⚠️ REQUIERE AUTORIZACIÓN para proceder.'
+                    )
                 
                 return redirect('black_invoices:venta_detail', pk=venta.id)
                 
@@ -965,8 +1012,8 @@ class RegistrarPagoView(EmpleadoRolMixin, UpdateView):
                 messages.error(request, f'La referencia es obligatoria para {dict(PagoVenta.METODOS_PAGO_CHOICES)[metodo_pago]}.')
                 return self.get(request, *args, **kwargs)
             
-            # Registrar pago con método
-            self.object.registrar_pago_con_metodo(monto, metodo_pago, referencia)
+            # Registrar pago usando el método con transacciones atómicas
+            pago = self.object.registrar_pago(monto, metodo_pago, referencia)
             
             metodo_display = dict(PagoVenta.METODOS_PAGO_CHOICES).get(metodo_pago, metodo_pago)
             
@@ -1019,47 +1066,22 @@ class AutorizarVentaView(EmpleadoRolMixin, View):
             empleado = request.user.empleado
             
             if accion == 'autorizar':
-                # Verificar stock antes de autorizar
-                detalles = venta.factura.detallefactura_set.all()
-                for detalle in detalles:
-                    if detalle.cantidad > detalle.producto.stock:
-                        messages.error(request, f'Stock insuficiente para {detalle.producto.nombre}')
-                        return redirect('black_invoices:ventas_autorizacion')
-                
-                # Descontar stock
-                for detalle in detalles:
-                    detalle.producto.stock -= detalle.cantidad
-                    detalle.producto.save(update_fields=['stock'])
-                
-                # Autorizar venta
-                venta.autorizada = True
-                venta.autorizada_por = empleado
-                venta.fecha_autorizacion = timezone.now()
-                venta.comentarios_autorizacion = comentarios
-                
-                # Cambiar estado
-                if venta.credito:
-                    estado = StatusVentas.objects.get(nombre="Pendiente")
-                else:
-                    estado = StatusVentas.objects.get(nombre="Completada")
-                    venta.monto_pagado = venta.factura.total_fac
-                
-                venta.status = estado
-                venta.save()
-                
-                messages.success(request, f'Venta #{venta.id} autorizada exitosamente.')
+                try:
+                    # Usar el método del modelo que ya tiene transacciones atómicas
+                    venta.autorizar_venta(empleado, comentarios)
+                    messages.success(request, f'Venta #{venta.id} autorizada exitosamente.')
+                except ValueError as e:
+                    messages.error(request, f'Error al autorizar venta: {str(e)}')
+                    return redirect('black_invoices:ventas_autorizacion')
                 
             elif accion == 'rechazar':
-                venta.autorizada = False
-                venta.autorizada_por = empleado
-                venta.fecha_autorizacion = timezone.now()
-                venta.comentarios_autorizacion = f"RECHAZADA: {comentarios}"
-                
-                estado_cancelado = StatusVentas.objects.get(vent_cancelada=True)
-                venta.status = estado_cancelado
-                venta.save()
-                
-                messages.success(request, f'Venta #{venta.id} rechazada.')
+                try:
+                    # Usar el método del modelo para rechazar
+                    venta.rechazar_venta(empleado, comentarios)
+                    messages.success(request, f'Venta #{venta.id} rechazada exitosamente.')
+                except ValueError as e:
+                    messages.error(request, f'Error al rechazar venta: {str(e)}')
+                    return redirect('black_invoices:ventas_autorizacion')
             
         except Ventas.DoesNotExist:
             messages.error(request, 'Venta no encontrada.')
@@ -1076,12 +1098,27 @@ class VentaDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = f'Detalle de venta #{self.object.id}'
+        venta = self.object
+        context['titulo'] = f'Detalle de venta #{venta.id}'
 
-        context['detalles'] = self.object.factura.detallefactura_set.all()
-
+        context['detalles'] = venta.factura.detallefactura_set.all()
+        
+        # Información de totales formateados
+        context['totales_formateados'] = venta.factura.get_totales_formateados()
+        
+        # Estado de la venta con nuevos campos
+        context['estado_autorizacion'] = venta.estado_autorizacion
+        context['saldo_pendiente'] = venta.saldo_pendiente if venta.credito else 0
+        context['completada'] = venta.completada
+        
+        # Historial de pagos si es a crédito
+        if venta.credito:
+            context['pagos'] = venta.pagos.all().order_by('-fecha')
+            context['resumen_pagos'] = venta.resumen_pagos()
+        
+        # Información de comisión
         try:
-            context['comision'] = self.object.comision
+            context['comision'] = venta.comision
         except:
             context['comision'] = None
         
@@ -1096,11 +1133,21 @@ def cancelar_venta(request, pk):
         if venta.status.vent_cancelada:
             messages.warning(request, 'La venta ya está cancelada.')
         else:
-            venta.cancelar_venta()
-            messages.success(request, f'Venta #{venta.id} cancelada exitosamente. Stock restaurado.')
+            try:
+                # Obtener empleado que realiza la cancelación
+                empleado_cancelador = request.user.empleado
+                
+                # Usar el método correcto del modelo con transacciones atómicas
+                venta.cancelar_venta_autorizada(empleado_cancelador, "Cancelación desde vista")
+                messages.success(request, f'Venta #{venta.id} cancelada exitosamente. Stock restaurado.')
+                
+            except ValueError as e:
+                messages.error(request, f'Error al cancelar venta: {str(e)}')
     
     except Ventas.DoesNotExist:
         messages.error(request, 'Venta no encontrada.')
+    except AttributeError:
+        messages.error(request, 'Usuario sin permisos de empleado para cancelar ventas.')
     
     return redirect('black_invoices:venta_list')
 

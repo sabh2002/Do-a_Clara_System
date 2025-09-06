@@ -65,6 +65,7 @@
                                         <th>Producto</th>
                                         <th>Precio</th>
                                         <th>Cantidad</th>
+                                        <th>Unidad</th>
                                         <th>Subtotal</th>
                                         <th>Acciones</th>
                                     </tr>
@@ -78,7 +79,8 @@
                                                     <option value="{{ p.id }}" 
                                                             data-precio="{{ p.precio }}" 
                                                             data-precio-bs="{{ p.precio|precio_bolivares }}" 
-                                                            data-stock="{{ p.stock }}">
+                                                            data-stock="{{ p.stock }}"
+                                                            data-unidad="{{ p.unidad_medida }}">
                                                         {{ p.nombre }}
                                                     </option>
                                                 {% endfor %}
@@ -89,7 +91,10 @@
                                             <br><small class="text-muted">0.00 Bs</small>
                                         </td>
                                         <td>
-                                            <input type="number" name="form-0-cantidad" class="form-control cantidad" min="1" value="1" max="100">
+                                            <input type="number" name="form-0-cantidad" class="form-control cantidad" min="0.001" step="0.001" value="1" max="100">
+                                        </td>
+                                        <td class="unidad">
+                                            <span class="text-muted">-</span>
                                         </td>
                                         <td class="subtotal">
                                             <strong>$0.00</strong>
@@ -149,8 +154,9 @@
 </div>
 
 <script>
-// Tasa de cambio desde el backend
-const tasaCambio = {{ ""|tasa_cambio_actual }};
+// Tasa de cambio desde el backend - SIMPLIFICADO
+const tasaCambio = 1; // Por ahora usar 1 para debug
+console.log('Script cargado, tasa de cambio:', tasaCambio);
 
 // Función para formatear números como moneda USD
 function formatCurrency(value) {
@@ -162,34 +168,66 @@ function formatBolivares(value) {
     return parseFloat(value).toFixed(2) + ' Bs';
 }
 
-// Función para manejar cambios en el select de producto (ACTUALIZADA)
+// Función para manejar cambios en el select de producto - SIMPLIFICADA
 function handleProductChange(event) {
+    console.log('=== PRODUCT CHANGE TRIGGERED ===');
     const select = event.target;
     const row = select.closest('.fila-producto');
+    
+    if (!row) {
+        console.error('No se encontró la fila');
+        return;
+    }
+    
     const priceCell = row.querySelector('.precio');
     const quantityInput = row.querySelector('.cantidad');
     const subtotalCell = row.querySelector('.subtotal');
+    const unidadCell = row.querySelector('.unidad');
+    
+    console.log('Elementos encontrados:', {
+        priceCell: !!priceCell,
+        quantityInput: !!quantityInput,
+        subtotalCell: !!subtotalCell,
+        unidadCell: !!unidadCell
+    });
     
     if (select.selectedIndex > 0) {
         const selectedOption = select.options[select.selectedIndex];
-        const price = parseFloat(selectedOption.dataset.precio);
-        const priceBs = parseFloat(selectedOption.dataset.precioBs || (price * tasaCambio));
-        const stock = parseInt(selectedOption.dataset.stock);
+        const price = parseFloat(selectedOption.getAttribute('data-precio')) || 0;
+        const stock = parseFloat(selectedOption.getAttribute('data-stock')) || 0;
+        const unidad = selectedOption.getAttribute('data-unidad') || 'unidad';
         
-        // Actualizar precio mostrado con ambas monedas
-        priceCell.innerHTML = `<strong>${formatCurrency(price)}</strong><br><small class="text-muted">${formatBolivares(priceBs)}</small>`;
+        console.log('Datos del producto:', { price, stock, unidad });
         
-        // Limitar cantidad al stock disponible
-        quantityInput.max = stock;
-        if (parseInt(quantityInput.value) > stock) {
-            quantityInput.value = stock;
+        if (price > 0) {
+            // Actualizar precio mostrado
+            const priceBs = price * tasaCambio;
+            if (priceCell) {
+                priceCell.innerHTML = `<strong>$${price.toFixed(2)}</strong><br><small class="text-muted">${priceBs.toFixed(2)} Bs</small>`;
+                console.log('Precio actualizado a:', price);
+            }
+            
+            // Mostrar unidad de medida
+            if (unidadCell) {
+                unidadCell.innerHTML = `<span class="text-info">${unidad}</span>`;
+            }
+            
+            // Configurar input de cantidad
+            if (quantityInput) {
+                quantityInput.max = stock;
+                if (parseFloat(quantityInput.value) > stock) {
+                    quantityInput.value = Math.min(1, stock);
+                }
+            }
+            
+            // Calcular subtotal
+            updateSubtotal(row);
         }
-        
-        // Calcular y actualizar subtotal
-        updateSubtotal(row);
     } else {
-        priceCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
-        subtotalCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
+        // Resetear valores
+        if (priceCell) priceCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
+        if (unidadCell) unidadCell.innerHTML = '<span class="text-muted">-</span>';
+        if (subtotalCell) subtotalCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
         updateTotal();
     }
 }
@@ -199,30 +237,43 @@ function handleQuantityChange(event) {
     const input = event.target;
     const row = input.closest('.fila-producto');
     
-    // Asegurar que la cantidad sea al menos 1
-    if (parseInt(input.value) < 1 || isNaN(parseInt(input.value))) {
-        input.value = 1;
+    // Asegurar que la cantidad sea al menos 0.001
+    const cantidad = parseFloat(input.value);
+    if (cantidad < 0.001 || isNaN(cantidad)) {
+        input.value = 0.001;
     }
     
     updateSubtotal(row);
 }
 
-// Actualizar el subtotal de una fila (ACTUALIZADA)
+// Función simplificada para actualizar subtotal
 function updateSubtotal(row) {
+    console.log('=== UPDATE SUBTOTAL ===');
+    
     const priceCell = row.querySelector('.precio');
     const quantityInput = row.querySelector('.cantidad');
     const subtotalCell = row.querySelector('.subtotal');
+    
+    if (!priceCell || !quantityInput || !subtotalCell) {
+        console.error('Elementos faltantes para calcular subtotal');
+        return;
+    }
     
     // Extraer precio USD del HTML
     const priceStrongElement = priceCell.querySelector('strong');
     const priceText = priceStrongElement ? priceStrongElement.textContent : '$0.00';
     const price = parseFloat(priceText.replace('$', '')) || 0;
-    const quantity = parseInt(quantityInput.value) || 0;
+    const quantity = parseFloat(quantityInput.value) || 0;
+    
+    console.log('Calculando subtotal:', { price, quantity });
     
     const subtotalUSD = price * quantity;
     const subtotalBs = subtotalUSD * tasaCambio;
     
-    subtotalCell.innerHTML = `<strong>${formatCurrency(subtotalUSD)}</strong><br><small class="text-muted">${formatBolivares(subtotalBs)}</small>`;
+    if (subtotalCell) {
+        subtotalCell.innerHTML = `<strong>$${subtotalUSD.toFixed(2)}</strong><br><small class="text-muted">${subtotalBs.toFixed(2)} Bs</small>`;
+        console.log('Subtotal actualizado:', subtotalUSD);
+    }
     
     // Actualizar el total general
     updateTotal();
@@ -353,26 +404,34 @@ function setupPaymentSync() {
     }
 }
 
-// Agregar nueva fila de producto (ACTUALIZADA)
+// Función simplificada para agregar nueva fila
 function addProductRow() {
-    // Clonar la primera fila
+    console.log('=== ADD PRODUCT ROW ===');
+    
     const firstRow = document.querySelector('.fila-producto');
+    if (!firstRow) {
+        console.error('No se encontró la primera fila');
+        alert('Error: No se puede agregar producto');
+        return;
+    }
+    
+    // Clonar la fila
     const newRow = firstRow.cloneNode(true);
     
     // Resetear valores
     const productSelect = newRow.querySelector('.producto-select');
-    productSelect.selectedIndex = 0;
-    
     const priceCell = newRow.querySelector('.precio');
-    priceCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
-    
     const quantityInput = newRow.querySelector('.cantidad');
-    quantityInput.value = 1;
-    
+    const unidadCell = newRow.querySelector('.unidad');
     const subtotalCell = newRow.querySelector('.subtotal');
-    subtotalCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
     
-    // Cambiar names a form-N-campo
+    if (productSelect) productSelect.selectedIndex = 0;
+    if (priceCell) priceCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
+    if (quantityInput) quantityInput.value = 1;
+    if (unidadCell) unidadCell.innerHTML = '<span class="text-muted">-</span>';
+    if (subtotalCell) subtotalCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
+    
+    // Actualizar nombres de campos
     const rowCount = document.querySelectorAll('.fila-producto').length;
     const inputs = newRow.querySelectorAll('input[name^="form-"], select[name^="form-"]');
     inputs.forEach(input => {
@@ -380,17 +439,25 @@ function addProductRow() {
         if (name) {
             const newName = name.replace(/form-\d+/, `form-${rowCount}`);
             input.setAttribute('name', newName);
+            console.log('Campo renombrado:', name, '->', newName);
         }
     });
     
-    // Agregar la nueva fila
-    document.querySelector('#tablaProductos tbody').appendChild(newRow);
-    
-    // Configurar event listeners para la nueva fila
-    setupRowEventListeners(newRow);
-    
-    // Actualizar TOTAL_FORMS
-    updateFormsetManagement();
+    // Agregar la fila a la tabla
+    const tbody = document.querySelector('#tablaProductos tbody');
+    if (tbody) {
+        tbody.appendChild(newRow);
+        console.log('Fila agregada exitosamente');
+        
+        // Configurar event listeners
+        setupRowEventListeners(newRow);
+        
+        // Actualizar formset
+        updateFormsetManagement();
+    } else {
+        console.error('No se encontró tbody');
+        alert('Error: No se pudo agregar el producto');
+    }
 }
 
 // Validación del formulario
@@ -424,16 +491,30 @@ function setupFormSubmitValidation() {
     }
 }
 
-// Inicializar cuando la página cargue
+// Inicialización simplificada y con debugging
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('=== DOM CONTENT LOADED ===');
+    
     // Configurar botón para agregar productos
     const addButton = document.getElementById('agregarProducto');
     if (addButton) {
-        addButton.addEventListener('click', addProductRow);
+        addButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            addProductRow();
+        });
+        console.log('Botón agregar producto configurado');
+    } else {
+        console.error('No se encontró el botón agregarProducto');
     }
     
     // Inicializar primera fila
-    setupRowEventListeners(document.querySelector('.fila-producto'));
+    const firstRow = document.querySelector('.fila-producto');
+    if (firstRow) {
+        setupRowEventListeners(firstRow);
+        console.log('Event listeners configurados para primera fila');
+    } else {
+        console.error('No se encontró la primera fila');
+    }
     
     // Configurar sincronización de método de pago
     setupPaymentSync();
@@ -444,8 +525,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Actualizar management form inicialmente
     updateFormsetManagement();
     
-    // Inicializar totales
-    updateTotal();
+    console.log('=== INICIALIZACIÓN COMPLETA ===');
 });
 </script> 
 {% endblock %}

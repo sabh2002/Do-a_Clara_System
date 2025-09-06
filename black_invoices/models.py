@@ -132,13 +132,16 @@ class Producto(models.Model):
         help_text=f"Precio en dólares (Máximo: ${PRECIO_MAXIMO:,.2f})"
     )
     
-    stock = models.PositiveIntegerField(
+    stock = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
         default=0,
         verbose_name="Stock disponible",
         validators=[
+            MinValueValidator(Decimal('0'), message="El stock no puede ser negativo"),
             MaxValueValidator(STOCK_MAXIMO, message=f"El stock no puede ser mayor a {STOCK_MAXIMO:,} unidades")
         ],
-        help_text=f"Cantidad disponible (Máximo: {STOCK_MAXIMO:,} unidades)"
+        help_text=f"Cantidad disponible (Máximo: {STOCK_MAXIMO:,} unidades). Permite hasta 3 decimales."
     )
 
     activo = models.BooleanField(
@@ -321,6 +324,9 @@ class Producto(models.Model):
 
     def validar_cantidad_segun_unidad(self, cantidad):
         """Valida si la cantidad es correcta según la unidad de medida"""
+        if not self.unidad_medida:
+            return False, "El producto no tiene unidad de medida asignada"
+            
         if not self.unidad_medida.permite_decimales:
             # Si no permite decimales, verificar que sea entero
             if cantidad != int(cantidad):
@@ -483,8 +489,8 @@ class Comision(models.Model):
         la comisión antes de guardar
         """
         if not self.total_comision:
-        # Obtenemos el total de la factura en lugar del total_venta de la venta
-            monto_venta = self.venta.factura.total_venta
+        # Obtenemos el total de la factura
+            monto_venta = self.venta.factura.total_fac
             
             rango = ConsultaComision.objects.filter(
                 rango_inferior__lte=monto_venta,
@@ -581,6 +587,7 @@ class Ventas(models.Model):
         """Registra un pago parcial con validaciones de autorización"""
         from decimal import Decimal
         from django.utils import timezone
+        from django.db import transaction
         
         # VALIDACIÓN: Solo ventas autorizadas pueden recibir pagos
         if not self.autorizada:
@@ -611,23 +618,24 @@ class Ventas(models.Model):
         if metodo_pago not in metodos_validos:
             raise ValueError(f"Método de pago no válido. Opciones: {metodos_validos}")
         
-        # ACTUALIZAR el monto pagado
-        self.monto_pagado += monto
-        
-        # CAMBIAR ESTADO si se completó el pago
-        if self.completada and self.credito:
-            estado_completado = StatusVentas.objects.get(nombre="Completada")
-            self.status = estado_completado
+        with transaction.atomic():
+            # ACTUALIZAR el monto pagado
+            self.monto_pagado += monto
             
-        self.save(update_fields=['monto_pagado', 'status'])
-        
-        # CREAR REGISTRO DE PAGO con método y referencia
-        pago = PagoVenta.objects.create(
-            venta=self,
-            monto=monto,
-            metodo_pago=metodo_pago,
-            referencia_pago=referencia_pago if referencia_pago else None
-        )
+            # CAMBIAR ESTADO si se completó el pago
+            if self.completada and self.credito:
+                estado_completado = StatusVentas.objects.get(nombre="Completada")
+                self.status = estado_completado
+                
+            self.save(update_fields=['monto_pagado', 'status'])
+            
+            # CREAR REGISTRO DE PAGO con método y referencia
+            pago = PagoVenta.objects.create(
+                venta=self,
+                monto=monto,
+                metodo_pago=metodo_pago,
+                referencia_pago=referencia_pago if referencia_pago else None
+            )
         
         return pago
     
@@ -688,6 +696,7 @@ class Ventas(models.Model):
     def autorizar_venta(self, empleado_autorizador, comentarios=""):
         """Autoriza la venta, descuenta stock y cambia su estado"""
         from django.utils import timezone
+        from django.db import transaction
         
         if empleado_autorizador.nivel_acceso.nombre not in ['Administrador', 'Supervisor']:
             raise ValueError("Solo administradores o supervisores pueden autorizar ventas")
@@ -695,41 +704,42 @@ class Ventas(models.Model):
         if self.autorizada:
             raise ValueError("Esta venta ya está autorizada")
         
-        # DESCONTAR STOCK AL AUTORIZAR
-        detalles = self.factura.detallefactura_set.all()
-        for detalle in detalles:
-            # Verificar stock nuevamente al momento de autorizar
-            if detalle.cantidad > detalle.producto.stock:
-                raise ValueError(f"Stock insuficiente para {detalle.producto.nombre}. "
-                            f"Disponible: {detalle.producto.stock}, Requerido: {detalle.cantidad}")
+        with transaction.atomic():
+            # DESCONTAR STOCK AL AUTORIZAR
+            detalles = self.factura.detallefactura_set.all()
+            for detalle in detalles:
+                # Verificar stock nuevamente al momento de autorizar
+                if detalle.cantidad > detalle.producto.stock:
+                    raise ValueError(f"Stock insuficiente para {detalle.producto.nombre}. "
+                                f"Disponible: {detalle.producto.stock}, Requerido: {detalle.cantidad}")
+                
+                # Descontar stock
+                detalle.producto.stock -= detalle.cantidad
+                detalle.producto.save(update_fields=['stock'])
             
-            # Descontar stock
-            detalle.producto.stock -= detalle.cantidad
-            detalle.producto.save(update_fields=['stock'])
-        
-        # Marcar como autorizada
-        self.autorizada = True
-        self.autorizada_por = empleado_autorizador
-        self.fecha_autorizacion = timezone.now()
-        self.comentarios_autorizacion = comentarios
-        
-        # Cambiar estado según el tipo de venta
-        if self.credito:
-            # Si es crédito y no tiene pagos, va a pendiente
-            if self.monto_pagado <= 0:
-                estado_nuevo = StatusVentas.objects.get(nombre="Pendiente")
+            # Marcar como autorizada
+            self.autorizada = True
+            self.autorizada_por = empleado_autorizador
+            self.fecha_autorizacion = timezone.now()
+            self.comentarios_autorizacion = comentarios
+            
+            # Cambiar estado según el tipo de venta
+            if self.credito:
+                # Si es crédito y no tiene pagos, va a pendiente
+                if self.monto_pagado <= 0:
+                    estado_nuevo = StatusVentas.objects.get(nombre="Pendiente")
+                else:
+                    # Si ya tiene pagos, verificar si está completada
+                    estado_nuevo = StatusVentas.objects.get(
+                        nombre="Completada" if self.completada else "Pendiente"
+                    )
             else:
-                # Si ya tiene pagos, verificar si está completada
-                estado_nuevo = StatusVentas.objects.get(
-                    nombre="Completada" if self.completada else "Pendiente"
-                )
-        else:
-            # Si es contado, va directo a completada y se marca como pagada
-            estado_nuevo = StatusVentas.objects.get(nombre="Completada")
-            self.monto_pagado = self.factura.total_fac
-        
-        self.status = estado_nuevo
-        self.save()
+                # Si es contado, va directo a completada y se marca como pagada
+                estado_nuevo = StatusVentas.objects.get(nombre="Completada")
+                self.monto_pagado = self.factura.total_fac
+            
+            self.status = estado_nuevo
+            self.save()
         
         return True
         
@@ -761,6 +771,7 @@ class Ventas(models.Model):
     def cancelar_venta_autorizada(self, empleado_cancelador, comentarios=""):
         """Cancela una venta YA AUTORIZADA y restaura el stock"""
         from django.utils import timezone
+        from django.db import transaction
         
         if empleado_cancelador.nivel_acceso.nombre not in ['Administrador', 'Supervisor']:
             raise ValueError("Solo administradores o supervisores pueden cancelar ventas autorizadas")
@@ -772,21 +783,36 @@ class Ventas(models.Model):
         if self.status.vent_cancelada:
             raise ValueError("Esta venta ya está cancelada")
         
-        # RESTAURAR STOCK (porque ya se había descontado al autorizar)
-        detalles = self.factura.detallefactura_set.all()
-        for detalle in detalles:
-            detalle.producto.stock += detalle.cantidad
-            detalle.producto.save(update_fields=['stock'])
-        
-        # Marcar como cancelada
-        self.comentarios_autorizacion += f"\nCANCELADA el {timezone.now().strftime('%d/%m/%Y %H:%M')} por {empleado_cancelador.nombre}: {comentarios}"
-        
-        # Cambiar a estado cancelada
-        estado_cancelado = StatusVentas.objects.get(vent_cancelada=True)
-        self.status = estado_cancelado
-        self.save()
+        with transaction.atomic():
+            # RESTAURAR STOCK (porque ya se había descontado al autorizar)
+            detalles = self.factura.detallefactura_set.all()
+            for detalle in detalles:
+                detalle.producto.stock += detalle.cantidad
+                detalle.producto.save(update_fields=['stock'])
+            
+            # Marcar como cancelada
+            self.comentarios_autorizacion += f"\nCANCELADA el {timezone.now().strftime('%d/%m/%Y %H:%M')} por {empleado_cancelador.nombre}: {comentarios}"
+            
+            # Cambiar a estado cancelada
+            estado_cancelado = StatusVentas.objects.get(vent_cancelada=True)
+            self.status = estado_cancelado
+            self.save()
     
         return True
+    @property
+    def saldo_pendiente(self):
+        """Calcula el saldo pendiente de pago para ventas a crédito"""
+        if not self.credito:
+            return Decimal('0.00')
+        return max(Decimal('0.00'), self.factura.total_fac - self.monto_pagado)
+    
+    @property
+    def completada(self):
+        """Verifica si la venta está completamente pagada"""
+        if not self.credito:
+            return True  # Las ventas de contado están completadas por definición
+        return self.monto_pagado >= self.factura.total_fac
+    
     @property
     def estado_autorizacion(self):
         """Retorna el estado de autorización de la venta"""
@@ -916,12 +942,7 @@ class Factura(models.Model):
         related_name='facturas_generadas'
     )
     
-    total_venta = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2,
-        verbose_name="Total de Venta",
-        default=0
-    )
+# Campo eliminado - ahora es una propiedad que retorna total_fac
     numero_factura = models.PositiveIntegerField(
         verbose_name="Número de Factura",
         unique=True,
@@ -951,6 +972,11 @@ class Factura(models.Model):
     def __str__(self):
         return f"Factura #{self.id} - Cliente: {self.cliente.nombre}"
     
+    @property
+    def total_venta(self):
+        """Propiedad para mantener compatibilidad - retorna total_fac"""
+        return self.total_fac
+    
     def calcular_total(self):
         """
         Calcula el total de la factura basado en sus detalles
@@ -960,7 +986,6 @@ class Factura(models.Model):
         )['total'] or 0
         
         self.total_fac = total
-        self.total_venta = total
         self.save()
         return total
     
@@ -979,10 +1004,6 @@ class Factura(models.Model):
         detalle = self.detallefactura_set.create(
             producto=producto,
             cantidad=cantidad,
-            # Cambiar esto:
-            # sub_total=Decimal(str(producto.precio_pro)) * Decimal(str(cantidad))
-            
-            # Por esto:
             sub_total=Decimal(str(producto.precio)) * Decimal(str(cantidad))
         )
         self.calcular_total()
@@ -1016,9 +1037,8 @@ class Factura(models.Model):
         self.subtotal = subtotal
         self.iva = iva
         self.total_fac = total
-        self.total_venta = total
         
-        self.save(update_fields=['subtotal', 'iva', 'total_fac', 'total_venta'])
+        self.save(update_fields=['subtotal', 'iva', 'total_fac'])
         
         return {
             'subtotal': subtotal,
@@ -1063,9 +1083,11 @@ class DetalleFactura(models.Model):
         on_delete=models.PROTECT,
         verbose_name="Producto"
     )
-    cantidad = models.PositiveIntegerField(
+    cantidad = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
         verbose_name="Cantidad",
-        validators=[MinValueValidator(1)]
+        validators=[MinValueValidator(Decimal('0.001'))]
     )
     sub_total = models.DecimalField(
         max_digits=10,
@@ -1405,7 +1427,7 @@ class ConfiguracionSistema(models.Model):
             defaults={
                 'nombre_empresa': 'Corporación Agrícola Doña Clara',
                 'rif_empresa': 'J-00000000-0',
-                'direccion_empresa': 'Mangueras y Conexiones Hidráulicas',
+                'direccion_empresa': 'Dirección de la empresa por configurar',
                 'telefono_empresa': '0000-000-0000',
             }
         )
@@ -1592,7 +1614,8 @@ class DetalleNotaEntrega(models.Model):
         ordering = ['producto__nombre']
 
     def __str__(self):
-        return f"{self.producto.nombre} - {self.cantidad} {self.producto.unidad_medida.abreviatura}"
+        unidad = self.producto.unidad_medida.abreviatura if self.producto.unidad_medida else "un"
+        return f"{self.producto.nombre} - {self.cantidad} {unidad}"
     
     def save(self, *args, **kwargs):
         # Calcular subtotal de la línea
