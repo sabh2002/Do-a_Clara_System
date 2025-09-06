@@ -172,19 +172,13 @@ class VentasAdmin(admin.ModelAdmin):
     search_fields = ('empleado__nombre',)
     date_hierarchy = 'fecha_venta'
 
-@admin.register(Comision)
-class ComisionAdmin(admin.ModelAdmin):
-    list_display = ('empleado', 'monto_venta', 'fecha_comision', 'total_comision')
-    list_filter = ('fecha_comision',)
-    search_fields = ('empleado__nombre',)
-    date_hierarchy = 'fecha_comision'
+
 
 # Registros simples para los modelos más básicos
 admin.site.register(NivelAcceso)
 admin.site.register(StatusVentas)
 admin.site.register(TipoFactura)
-admin.site.register(TablaConfig)
-admin.site.register(ConsultaComision)
+
 
 @admin.register(ConfiguracionSistema)
 class ConfiguracionSistemaAdmin(admin.ModelAdmin):

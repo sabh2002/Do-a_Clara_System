@@ -564,163 +564,7 @@ from django.db import transaction
 from django.urls import reverse_lazy
 from django.contrib import messages
 
-""" class VentaCreateView(LoginRequiredMixin, CreateView):
-    model = Factura
-    form_class = FacturaForm
-    template_name = 'black_invoices/ventas/venta_form.html'
-    success_url = reverse_lazy('black_invoices:venta_list')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['titulo'] = 'Crear Venta'
-        
-        if self.request.POST:
-            context['detalles_formset'] = DetalleFacturaFormSet(self.request.POST)
-        else:
-            context['detalles_formset'] = DetalleFacturaFormSet()
-        context['clientes'] = Cliente.objects.all() #.objects.filter(activo=True)
-        context['productos'] = Producto.objects.all() #.objects.filter(activo=True)
-        
-        # Añadir opciones de crédito
-        context['opciones_venta'] = [
-            {'id': 'contado', 'nombre': 'Contado'},
-            {'id': 'credito', 'nombre': 'Crédito'}
-        ]
-        
-        return context
-    
-    def form_valid(self, form):
-        context = self.get_context_data()
-        formset = context['detalles_formset']
-        
-        try:
-            with transaction.atomic():
-                # Verificar que el usuario tenga un empleado asociado
-                if not hasattr(self.request.user, 'empleado'):
-                    messages.error(self.request, 'No tienes un perfil de empleado asociado.')
-                    return self.form_invalid(form)
-                
-                # Crear la factura pero no guardarla aún
-                factura = form.save(commit=False)
-                factura.empleado = self.request.user.empleado
-                factura.save()
-                
-                # Validar el formset directamente
-                if formset.is_valid():
-                    detalles = formset.save(commit=False)
-                    
-                    if not detalles:
-                        # Si no hay detalles, intentar procesarlos manualmente
-                        total_forms = int(self.request.POST.get('form-TOTAL_FORMS', 0))
-                        
-                        # Información de diagnóstico
-                        print(f"Total de formularios: {total_forms}")
-                        print(f"Datos POST: {self.request.POST}")
-                        
-                        # Crear manualmente los detalles
-                        for i in range(total_forms):
-                            producto_id = self.request.POST.get(f'form-{i}-producto')
-                            cantidad_str = self.request.POST.get(f'form-{i}-cantidad')
-                            
-                            if producto_id and cantidad_str:
-                                # Determinar tipo de factura basado en tipo_venta
-                                es_credito = self.request.POST.get('tipo_venta') == 'credito'
-                                tipo_factura = TipoFactura.objects.get(pk=2 if es_credito else 1)
-                                
-                                producto = Producto.objects.get(pk=producto_id)
-                                cantidad = Decimal(str(cantidad_str))
-                                
-                                # Verificar stock
-                                if cantidad > producto.stock:
-                                    raise ValueError(f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}")
-                                
-                                # Crear detalle
-                                subtotal = producto.precio * cantidad
-                                detalle = DetalleFactura(
-                                    factura=factura,
-                                    producto=producto,
-                                    cantidad=cantidad,
-                                    tipo_factura=tipo_factura,
-                                    sub_total=subtotal
-                                )
-                                detalle.save()
-                                
-                                # Reducir stock
-                                producto.stock -= cantidad
-                                producto.save(update_fields=['stock'])
-                                
-                                # Agregar al array de detalles
-                                detalles.append(detalle)
-                        
-                        if not detalles:
-                            raise ValueError("Debe agregar al menos un producto a la venta. Verifique que seleccionó un producto y una cantidad.")
-                    else:
-                        # Procesar los detalles del formset
-                        total_factura = 0
-                        
-                        for detalle in detalles:
-                            detalle.factura = factura
-                            
-                            # Verificar stock
-                            if detalle.cantidad > detalle.producto.stock:
-                                raise ValueError(f"Stock insuficiente para {detalle.producto.nombre}. Disponible: {detalle.producto.stock}")
-                            
-                            # Calcular subtotal
-                            subtotal = detalle.cantidad * detalle.producto.precio
-                            detalle.sub_total = subtotal
-                            detalle.save()
-                            
-                            # Reducir stock
-                            detalle.producto.stock -= detalle.cantidad
-                            detalle.producto.save(update_fields=['stock'])
-                            
-                            total_factura += subtotal
-                    
-                    # Calcular el total en cualquier caso
-                    total_factura = sum(detalle.sub_total for detalle in detalles)
-                    
-                    # Actualizar total de factura
-                    factura.total_fac = total_factura
-                    factura.total_venta = total_factura
-                    factura.save()
-                    
-                    # Crear venta
-                    es_credito = self.request.POST.get('tipo_venta') == 'credito'
-                    
-                    if es_credito:
-                        estado = StatusVentas.objects.get(nombre="Pendiente")
-                    else:
-                        estado = StatusVentas.objects.get(nombre="Completada")
-                    
-                    venta = Ventas.objects.create(
-                        empleado=factura.empleado,
-                        factura=factura,
-                        status=estado,
-                        credito=es_credito,
-                        monto_pagado=0 if es_credito else factura.total_fac
-                    )
-                    
-                    if es_credito:
-                        messages.success(self.request, f'Venta a crédito #{venta.id} creada exitosamente.')
-                    else:
-                        messages.success(self.request, f'Venta #{venta.id} creada exitosamente.')
-                    
-                    # Necesario para que la vista funcione correctamente
-                    self.object = factura
-                    
-                    return redirect('black_invoices:venta_detail', pk=venta.id)
-                else:
-                    # Mostrar errores específicos del formset
-                    print(f"Formset inválido. Errores: {formset.errors}")
-                    for i, form_errors in enumerate(formset.errors):
-                        if form_errors:
-                            messages.error(self.request, f"Error en producto {i+1}: {form_errors}")
-                    return self.form_invalid(form)
-                    
-        except Exception as e:
-                messages.error(self.request, f"Error: {str(e)}")
-                print(f"Excepción: {type(e).__name__}: {str(e)}")
-                return self.form_invalid(form) """
+
 class VentaCreateView(LoginRequiredMixin, View):
     template_name = 'black_invoices/ventas/venta_form.html'
     
@@ -806,14 +650,13 @@ class VentaCreateView(LoginRequiredMixin, View):
                 for prod in productos:
                     try:
                         producto = Producto.objects.get(pk=prod['id'])
-                        cantidad = Decimal(str(prod['cantidad']))  # Convertir a Decimal desde el inicio
+                        cantidad = Decimal(str(prod['cantidad']))
                         
-                        # Solo verificar disponibilidad - NO DESCONTAR STOCK AÚN
-                        # El stock se descontará cuando se autorice la venta
+                        # Verificar disponibilidad de stock
                         if cantidad > producto.stock:
                             raise ValueError(f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}")
                         
-                        # Calcular subtotal (ambos son Decimal ahora)
+                        # Calcular subtotal
                         subtotal = producto.precio * cantidad
                         total_factura += subtotal
                         
@@ -827,7 +670,9 @@ class VentaCreateView(LoginRequiredMixin, View):
                         )
                         detalle.save()
                         
-                        # *** NO DESCONTAMOS STOCK AQUÍ - se hará en la autorización ***
+                        # DESCONTAR STOCK INMEDIATAMENTE
+                        producto.stock -= cantidad
+                        producto.save(update_fields=['stock'])
                         
                     except Producto.DoesNotExist:
                         raise ValueError(f"El producto con ID {prod['id']} no existe.")
@@ -835,44 +680,67 @@ class VentaCreateView(LoginRequiredMixin, View):
                 # 6. Actualizar el total de la factura usando calcular_total_mejorado
                 factura.calcular_total_mejorado()
                 
-                # 7. Crear la venta con sistema de autorización
-                # TODAS las ventas inician como "Pendiente de Autorización"
+                # 7. Crear la venta y establecer estado según tipo
+                # Asegurar que los estados existan
                 try:
-                    estado_pendiente_autorizacion = StatusVentas.objects.get(nombre="Pendiente de Autorización")
+                    if es_credito:
+                        estado = StatusVentas.objects.get(nombre="Pendiente")
+                    else:
+                        estado = StatusVentas.objects.get(nombre="Completada")
                 except StatusVentas.DoesNotExist:
-                    # Si no existe, crear el estado
-                    estado_pendiente_autorizacion = StatusVentas.objects.create(
-                        nombre="Pendiente de Autorización",
-                        vent_espera=True,
-                        vent_cancelada=False
-                    )
+                    # Crear los estados si no existen
+                    if es_credito:
+                        estado = StatusVentas.objects.create(
+                            nombre="Pendiente",
+                            vent_espera=True,
+                            vent_cancelada=False
+                        )
+                    else:
+                        estado = StatusVentas.objects.create(
+                            nombre="Completada",
+                            vent_espera=False,
+                            vent_cancelada=False
+                        )
                 
                 venta = Ventas.objects.create(
                     empleado=factura.empleado,
                     factura=factura,
-                    status=estado_pendiente_autorizacion,
+                    status=estado,
                     credito=es_credito,
-                    monto_pagado=0,  # Nunca se paga hasta que se autorice
-                    requiere_autorizacion=True,
-                    autorizada=False
+                    monto_pagado=0 if es_credito else factura.total_fac
                 )
                 
-                # 8. Mensaje de éxito con información de autorización requerida
+                # 8. Mensaje de éxito
                 tasa_actual = TasaCambio.get_tasa_actual()
                 if tasa_actual:
                     total_bs = factura.total_fac * tasa_actual.tasa_usd_ves
-                    messages.success(
-                        request, 
-                        f'Venta {"a crédito " if es_credito else ""}#{venta.id} creada exitosamente. '
-                        f'Total: ${factura.total_fac:,.2f} ({total_bs:,.2f} Bs). '
-                        f'⚠️ REQUIERE AUTORIZACIÓN para proceder.'
-                    )
+                    if es_credito:
+                        messages.success(
+                            request, 
+                            f'Venta a crédito #{venta.id} creada exitosamente. '
+                            f'Total: ${factura.total_fac:,.2f} ({total_bs:,.2f} Bs). '
+                            f'Estado: PENDIENTE DE PAGO'
+                        )
+                    else:
+                        messages.success(
+                            request, 
+                            f'Venta #{venta.id} completada exitosamente. '
+                            f'Total: ${factura.total_fac:,.2f} ({total_bs:,.2f} Bs). '
+                            f'Pago recibido.'
+                        )
                 else:
-                    messages.success(
-                        request, 
-                        f'Venta {"a crédito " if es_credito else ""}#{venta.id} creada exitosamente. '
-                        f'⚠️ REQUIERE AUTORIZACIÓN para proceder.'
-                    )
+                    if es_credito:
+                        messages.success(
+                            request, 
+                            f'Venta a crédito #{venta.id} creada exitosamente. '
+                            f'Total: ${factura.total_fac:,.2f}. Estado: PENDIENTE DE PAGO'
+                        )
+                    else:
+                        messages.success(
+                            request, 
+                            f'Venta #{venta.id} completada exitosamente. '
+                            f'Total: ${factura.total_fac:,.2f}. Pago recibido.'
+                        )
                 
                 return redirect('black_invoices:venta_detail', pk=venta.id)
                 
@@ -909,70 +777,7 @@ class VentasPendientesView(EmpleadoRolMixin, ListView):
         context['titulo'] = 'Abonos (Crédito)'
         return context
     
-""" class RegistrarPagoView(EmpleadoRolMixin, UpdateView):
-    model = Ventas
-    template_name = 'black_invoices/ventas/registrar_pago.html'
-    fields = []
-    roles_permitidos = ['Administrador', 'Supervisor', 'Vendedor']
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['titulo'] = f'Registrar Pago - Venta #{self.object.id}'
-        context['venta'] = self.object
-        return context
-    
-    def post(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        
-        # VALIDAR que esté autorizada
-        if not self.object.autorizada:
-            messages.error(request, 'No se pueden registrar pagos en ventas no autorizadas.')
-            return redirect('black_invoices:ventas_pendientes')
-        
-        try:
-            monto = float(request.POST.get('monto', 0))
-            metodo_pago = request.POST.get('metodo_pago', 'efectivo')  # NUEVO
-            referencia = request.POST.get('referencia_pago', '')      # NUEVO
-            
-            if monto <= 0:
-                messages.error(request, 'El monto debe ser mayor a cero.')
-                return self.get(request, *args, **kwargs)
-            
-            if monto > (self.object.saldo_pendiente + Decimal(0.01)):
-                messages.error(request, f'El monto excede el saldo pendiente (${self.object.saldo_pendiente}).')
-                return self.get(request, *args, **kwargs)
-            
-            # Registrar pago
-            from decimal import Decimal
-            monto_decimal = Decimal(str(monto))
-            self.object.monto_pagado += monto_decimal
-            
-            if self.object.completada and self.object.credito:
-                estado_completado = StatusVentas.objects.get(nombre="Completada")
-                self.object.status = estado_completado
-                
-            self.object.save(update_fields=['monto_pagado', 'status'])
-            
-            # CREAR REGISTRO CON MÉTODO DE PAGO
-            PagoVenta.objects.create(
-                venta=self.object,
-                monto=monto_decimal,
-                metodo_pago=metodo_pago,           # NUEVO
-                referencia_pago=referencia if referencia else None  # NUEVO
-            )
-            
-            metodo_nombre = dict(PagoVenta.METODOS_PAGO_CHOICES)[metodo_pago]
-            
-            if self.object.completada:
-                messages.success(request, f'Pago de ${monto} vía {metodo_nombre} registrado. Venta completada.')
-            else:
-                messages.success(request, f'Pago de ${monto} vía {metodo_nombre} registrado. Saldo: ${self.object.saldo_pendiente}')
-            
-            return redirect('black_invoices:ventas_pendientes')
-            
-        except ValueError:
-            messages.error(request, 'Por favor ingrese un monto válido.')
-            return self.get(request, *args, **kwargs) """
+
 class RegistrarPagoView(EmpleadoRolMixin, UpdateView):
     model = Ventas
     template_name = 'black_invoices/ventas/registrar_pago.html'
@@ -1037,59 +842,6 @@ class RegistrarPagoView(EmpleadoRolMixin, UpdateView):
         except Exception as e:
             messages.error(request, f'Error al procesar el pago: {str(e)}')
             return self.get(request, *args, **kwargs)
-class VentasAutorizacionView(EmpleadoRolMixin, ListView):
-    model = Ventas
-    template_name = 'black_invoices/ventas/ventas_autorizacion.html'
-    context_object_name = 'ventas'
-    roles_permitidos = ['Administrador', 'Supervisor']
-    
-    def get_queryset(self):
-        return Ventas.objects.filter(
-            requiere_autorizacion=True,
-            autorizada=False,
-            status__vent_cancelada=False
-        ).order_by('-fecha_venta')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['titulo'] = 'Ventas Pendientes de Autorización'
-        return context
-
-class AutorizarVentaView(EmpleadoRolMixin, View):
-    roles_permitidos = ['Administrador', 'Supervisor']
-    
-    def post(self, request, pk):
-        try:
-            venta = Ventas.objects.get(pk=pk)
-            accion = request.POST.get('accion')
-            comentarios = request.POST.get('comentarios', '')
-            empleado = request.user.empleado
-            
-            if accion == 'autorizar':
-                try:
-                    # Usar el método del modelo que ya tiene transacciones atómicas
-                    venta.autorizar_venta(empleado, comentarios)
-                    messages.success(request, f'Venta #{venta.id} autorizada exitosamente.')
-                except ValueError as e:
-                    messages.error(request, f'Error al autorizar venta: {str(e)}')
-                    return redirect('black_invoices:ventas_autorizacion')
-                
-            elif accion == 'rechazar':
-                try:
-                    # Usar el método del modelo para rechazar
-                    venta.rechazar_venta(empleado, comentarios)
-                    messages.success(request, f'Venta #{venta.id} rechazada exitosamente.')
-                except ValueError as e:
-                    messages.error(request, f'Error al rechazar venta: {str(e)}')
-                    return redirect('black_invoices:ventas_autorizacion')
-            
-        except Ventas.DoesNotExist:
-            messages.error(request, 'Venta no encontrada.')
-        except Exception as e:
-            messages.error(request, f'Error: {str(e)}')
-        
-        return redirect('black_invoices:ventas_autorizacion')
-
         
 class VentaDetailView(LoginRequiredMixin, DetailView):
     model = Ventas
@@ -1107,7 +859,6 @@ class VentaDetailView(LoginRequiredMixin, DetailView):
         context['totales_formateados'] = venta.factura.get_totales_formateados()
         
         # Estado de la venta con nuevos campos
-        context['estado_autorizacion'] = venta.estado_autorizacion
         context['saldo_pendiente'] = venta.saldo_pendiente if venta.credito else 0
         context['completada'] = venta.completada
         
@@ -1138,7 +889,7 @@ def cancelar_venta(request, pk):
                 empleado_cancelador = request.user.empleado
                 
                 # Usar el método correcto del modelo con transacciones atómicas
-                venta.cancelar_venta_autorizada(empleado_cancelador, "Cancelación desde vista")
+                venta.cancelar_venta()
                 messages.success(request, f'Venta #{venta.id} cancelada exitosamente. Stock restaurado.')
                 
             except ValueError as e:
@@ -1152,228 +903,8 @@ def cancelar_venta(request, pk):
     return redirect('black_invoices:venta_list')
 
 
-######################      COMISIONES      ###############
 from django.db.models import Q
 
-class RangosComisionesListView(LoginRequiredMixin, ListView):
-    model = ConsultaComision
-    template_name = 'black_invoices/comisiones/rangos_list.html'
-    context_object_name = 'rangos'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['titulo'] = 'Rangos de Comisiones'
-        return context
-
-class RangosComisionesCreateView(LoginRequiredMixin, CreateView):
-    model = ConsultaComision
-    template_name = 'black_invoices/comisiones/rangos_form.html'
-    fields = ['rango_inferior', 'rango_superior', 'porcentaje']
-    success_url = reverse_lazy('black_invoices:rangos_comisiones_list')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['titulo'] = 'Añadir Rango de Comisión'
-        context['boton'] = 'Guardar'
-        return context
-    
-    def form_valid(self, form):
-        messages.success(self.request, 'Rango de comisión creado exitosamente')
-        return super().form_valid(form)
-
-class RangosComisionesUpdateView(LoginRequiredMixin, UpdateView):
-    model = ConsultaComision
-    template_name = 'black_invoices/comisiones/rangos_form.html'
-    fields = ['rango_inferior', 'rango_superior', 'porcentaje']
-    success_url = reverse_lazy('black_invoices:rangos_comisiones_list')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['titulo'] = 'Editar Rango de Comisión'
-        context['boton'] = 'Actualizar'
-        return context
-    
-    def form_valid(self, form):
-        messages.success(self.request, 'Rango de comisión actualizado exitosamente')
-        return super().form_valid(form)
-
-class RangosComisionesDeleteView(LoginRequiredMixin, DeleteView):
-    model = ConsultaComision
-    template_name = 'black_invoices/comisiones/rangos_confirm_delete.html'
-    success_url = reverse_lazy('black_invoices:rangos_comisiones_list')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['titulo'] = 'Eliminar Rango de Comisión'
-        return context
-    
-    def delete(self, request, *args, **kwargs):
-        messages.success(self.request, 'Rango de comisión eliminado exitosamente')
-        return super().delete(request, *args, **kwargs)
-class ComisionListView(LoginRequiredMixin, ListView):
-    model = Empleado
-    template_name = 'black_invoices/comisiones/comision_list.html'
-    context_object_name = 'empleados'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['titulo'] = 'Comisiones'
-        
-        if hasattr(self.request.user, 'empleado'):
-            empleado = self.request.user.empleado
-            mes_actual = datetime.now().month
-            anio_actual = datetime.now().year
-            
-            # Filtrar empleados según el nivel de acceso
-            es_admin = empleado.nivel_acceso.nombre == 'Administrador'
-            context['es_administrador'] = es_admin
-            
-            if es_admin:
-                empleados = Empleado.objects.filter(activo=True)
-            else:
-                empleados = Empleado.objects.filter(id=empleado.id)
-            
-            # Calcular comisiones para cada empleado
-            comisiones = []
-            for emp in empleados:
-                # Obtener ventas completadas
-                ventas_completadas = Ventas.objects.filter(
-                    empleado=emp,
-                    factura__fecha_fac__month=mes_actual,
-                    factura__fecha_fac__year=anio_actual
-                ).exclude(status__vent_cancelada=True).filter(
-                    # Solo ventas completadas (contado o crédito pagado)
-                    Q(credito=False) | Q(credito=True, monto_pagado__gte=F('factura__total_fac'))
-                )
-                
-                # Calcular comisión
-                total_comision = emp.get_comisiones_mes(mes_actual, anio_actual)
-                
-                comisiones.append({
-                    'empleado': emp,
-                    'ventas': ventas_completadas.count(),
-                    'comision': total_comision
-                })
-            
-            context['comisiones'] = comisiones
-            
-            # Cálculo para el empleado actual (para el widget)
-            context['total_mes'] = empleado.get_comisiones_mes(mes_actual, anio_actual)
-            context['total_anio'] = sum(
-                empleado.get_comisiones_mes(m, anio_actual) 
-                for m in range(1, mes_actual + 1)
-            )
-        
-        return context
-    
-# Agregar esta vista al archivo views.py existente
-
-class HistorialComisionesView(LoginRequiredMixin, ListView):
-    model = Ventas
-    template_name = 'black_invoices/comisiones/historial_comisiones.html'
-    context_object_name = 'ventas'
-    
-    def get_queryset(self):
-        # Obtener todas las ventas completadas (no canceladas)
-        queryset = Ventas.objects.exclude(
-            status__vent_cancelada=True
-        ).select_related(
-            'empleado', 'empleado__nivel_acceso', 'factura', 'factura__cliente', 'status'
-        ).filter(
-            # Solo ventas completadas (contado o crédito pagado)
-            Q(credito=False) | Q(credito=True, monto_pagado__gte=F('factura__total_fac'))
-        ).order_by('-factura__fecha_fac')
-        
-        return queryset
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['titulo'] = 'Historial de Comisiones'
-        
-        # Obtener todas las ventas para cálculos
-        ventas = self.get_queryset()
-        
-        # Preparar datos de historial con comisiones calculadas
-        historial_comisiones = []
-        total_comisiones_general = Decimal('0.00')
-        total_ventas_calculadas = 0
-        
-        for venta in ventas:
-            # Calcular comisión para esta venta
-            total_venta = venta.factura.total_fac
-            rango_comision = ConsultaComision.objects.filter(
-                rango_inferior__lte=total_venta,
-                rango_superior__gte=total_venta
-            ).first()
-            
-            porcentaje = rango_comision.porcentaje if rango_comision else Decimal('0.00')
-            comision_venta = (total_venta * porcentaje / Decimal('100.00')) if rango_comision else Decimal('0.00')
-            total_comisiones_general += comision_venta
-            total_ventas_calculadas += 1
-            
-            # Determinar estado de la venta
-            if venta.status.vent_cancelada:
-                estado = 'Cancelada'
-            elif venta.status.vent_espera or (venta.credito and venta.monto_pagado < venta.factura.total_fac):
-                estado = 'Pendiente'
-            else:
-                estado = 'Completada'
-            
-            historial_comisiones.append({
-                'venta_id': venta.id,
-                'empleado_nombre': f"{venta.empleado.nombre} {venta.empleado.apellido}",
-                'empleado_nivel': venta.empleado.nivel_acceso.nombre,
-                'fecha_venta': venta.factura.fecha_fac,
-                'numero_recibo': venta.factura.id,
-                'cliente_nombre': f"{venta.factura.cliente.nombre} {venta.factura.cliente.apellido}",
-                'total_venta': total_venta,
-                'porcentaje_comision': porcentaje,
-                'monto_comision': comision_venta,
-                'estado_venta': estado,
-                'es_credito': venta.credito
-            })
-        
-        context['historial_comisiones'] = historial_comisiones
-        
-        # Estadísticas generales
-        context['estadisticas'] = {
-            'total_comisiones': total_comisiones_general,
-            'total_ventas': total_ventas_calculadas,
-            'promedio_comision': total_comisiones_general / total_ventas_calculadas if total_ventas_calculadas > 0 else Decimal('0.00')
-        }
-        
-        # Datos para filtros
-        context['empleados_unicos'] = Empleado.objects.filter(
-            activo=True
-        ).values('id', 'nombre', 'apellido').distinct()
-        
-        context['niveles_acceso'] = NivelAcceso.objects.all()
-        
-        # Meses del año actual
-        año_actual = datetime.now().year
-        context['meses_año'] = [
-            {'numero': 1, 'nombre': 'Enero'},
-            {'numero': 2, 'nombre': 'Febrero'},
-            {'numero': 3, 'nombre': 'Marzo'},
-            {'numero': 4, 'nombre': 'Abril'},
-            {'numero': 5, 'nombre': 'Mayo'},
-            {'numero': 6, 'nombre': 'Junio'},
-            {'numero': 7, 'nombre': 'Julio'},
-            {'numero': 8, 'nombre': 'Agosto'},
-            {'numero': 9, 'nombre': 'Septiembre'},
-            {'numero': 10, 'nombre': 'Octubre'},
-            {'numero': 11, 'nombre': 'Noviembre'},
-            {'numero': 12, 'nombre': 'Diciembre'},
-        ]
-        context['año_actual'] = año_actual
-        
-        # Porcentajes de comisión disponibles
-        context['porcentajes_comision'] = ConsultaComision.objects.values_list(
-            'porcentaje', flat=True
-        ).distinct().order_by('porcentaje')
-        
-        return context
-    
 class UserProfileUpdateView(LoginRequiredMixin, UpdateView):
     model = Empleado
     form_class = UserProfileForm 
@@ -1444,9 +975,9 @@ class FacturaPDFView(LoginRequiredMixin, View):
         width, height = letter
 
         # --- Membrete y Logo ---
-        logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/the_black.jpeg')
+        logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
         if os.path.exists(logo_path):
-            p.drawImage(logo_path, 40, height - 110, width=120, height=60, preserveAspectRatio=True, mask='auto')
+            p.drawImage(logo_path, - 40, height - 180, width=320, height=150, preserveAspectRatio=True, mask='auto')
         
         # Nombre de la empresa (ajustado a la izquierda)
         p.setFont("Helvetica-Bold", 12)
@@ -1573,212 +1104,6 @@ class FacturaPDFView(LoginRequiredMixin, View):
         response['Content-Disposition'] = f'attachment; filename="Recibo_Venta_{factura.id}.pdf"'
         return response
 
-def comision_detail(request, empleado_id):
-    try:
-        empleado = Empleado.objects.get(id=empleado_id)
-        mes_actual = datetime.now().month
-        anio_actual = datetime.now().year
-        ventas = Ventas.objects.filter(
-            empleado=empleado,
-            factura__fecha_fac__month=mes_actual,
-            factura__fecha_fac__year=anio_actual
-        ).exclude(status__vent_cancelada=True).filter(
-            Q(credito=False) | Q(credito=True, monto_pagado__gte=F('factura__total_fac'))
-        )
-        total_comision = Decimal('0.00')
-        ventas_detalle = []
-        for venta in ventas:
-            total_venta = venta.factura.total_fac
-            rango_comision = ConsultaComision.objects.filter(
-                rango_inferior__lte=total_venta,
-                rango_superior__gte=total_venta
-            ).first()
-            porcentaje = rango_comision.porcentaje if rango_comision else Decimal('0.00')
-            comision_venta = (total_venta * porcentaje / Decimal('100.00')) if rango_comision else Decimal('0.00')
-            total_comision += comision_venta
-            ventas_detalle.append({
-                'factura': venta.factura,
-                'comision': comision_venta,
-                'porcentaje': porcentaje,
-                'venta_id': venta.id
-            })
-        porcentaje_promedio = ''
-        if ventas_detalle:
-            suma_porcentajes = sum([v['porcentaje'] for v in ventas_detalle])
-            porcentaje_promedio = suma_porcentajes / len(ventas_detalle)
-            porcentaje_promedio = f"{porcentaje_promedio:.2f}"  # String para mostrar
-        comision_data = {
-            'empleado': empleado,
-            'ventas': ventas.count(),
-            'comision': total_comision,
-            'porcentaje': porcentaje_promedio
-        }
-        context = {
-            'titulo': f'Detalle de Comisión - {empleado.nombre} {empleado.apellido}',
-            'comision': comision_data,
-            'ventas_detalle': ventas_detalle
-        }
-        return render(request, 'black_invoices/comisiones/comision_detail.html', context)
-    except Empleado.DoesNotExist:
-        messages.error(request, 'El empleado no existe.')
-        return redirect('black_invoices:comision_list')
-    except Exception as e:
-        messages.error(request, f'Error al cargar el detalle de comisión: {str(e)}')
-        return redirect('black_invoices:comision_list')
-
-class ComisionPDFView(LoginRequiredMixin, View):
-    def get(self, request, empleado_id):
-        try:
-            empleado = Empleado.objects.get(id=empleado_id)
-            mes_actual = datetime.now().month
-            anio_actual = datetime.now().year
-            
-            # Definir fecha actual
-            fecha_actual = datetime.now().strftime("%d/%m/%Y")
-            
-            # Obtener ventas completadas
-            ventas = Ventas.objects.filter(
-                empleado=empleado,
-                factura__fecha_fac__month=mes_actual,
-                factura__fecha_fac__year=anio_actual
-            ).exclude(status__vent_cancelada=True).filter(
-                Q(credito=False) | Q(credito=True, monto_pagado__gte=F('factura__total_fac'))
-            )
-            
-            # Calcular comisiones
-            total_comision = Decimal('0.00')
-            ventas_detalle = []
-            for venta in ventas:
-                total_venta = venta.factura.total_fac
-                rango_comision = ConsultaComision.objects.filter(
-                    rango_inferior__lte=total_venta,
-                    rango_superior__gte=total_venta
-                ).first()
-                porcentaje = rango_comision.porcentaje if rango_comision else Decimal('0.00')
-                comision_venta = (total_venta * porcentaje / Decimal('100.00')) if rango_comision else Decimal('0.00')
-                total_comision += comision_venta
-                ventas_detalle.append({
-                    'factura': venta.factura,
-                    'comision': comision_venta,
-                    'porcentaje': porcentaje,
-                    'venta_id': venta.id
-                })
-
-            # Crear el PDF
-            buffer = io.BytesIO()
-            p = canvas.Canvas(buffer, pagesize=letter)
-            width, height = letter
-            
-            # --- Membrete y Logo ---
-            logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/the_black.jpeg')
-            if os.path.exists(logo_path):
-                p.drawImage(logo_path, 40, height - 110, width=120, height=60, preserveAspectRatio=True, mask='auto')
-            
-            # Nombre de la empresa y RIF
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(180, height - 50, "INDUSTRIA & HERRAMIENTA EL NEGRITO, C.A.")
-            p.setFont("Helvetica-Bold", 11)
-            p.drawString(180, height - 65, "RIF: J-406050717")
-            
-            # Dirección y teléfonos
-            p.setFont("Helvetica", 10)
-            p.drawString(180, height - 80, "CR 10 ENTRE CALLES 4 Y 5 EDIF DOÑA EDITH PISO 1 OF 2")
-            p.drawString(180, height - 95, "BARRIO MATURIN GUANARE PORTUGUESA")
-            p.drawString(180, height - 110, "Teléfonos: 0257-5143082 / 0257-5143082")
-            
-            # --- Título del reporte ---
-            p.setFont("Helvetica-Bold", 13)
-            p.drawString(50, height - 130, "REPORTE DE COMISIÓN")
-            
-            # --- Datos del empleado ---
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(50, height - 160, "Información del Empleado:")
-            p.setFont("Helvetica", 10)
-            p.drawString(50, height - 180, f"Nombre: {empleado.nombre} {empleado.apellido}")
-            p.drawString(50, height - 195, f"Nivel de Acceso: {empleado.nivel_acceso.nombre}")
-            
-            # --- Añadir información de resumen de comisión ---
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(50, height - 225, "Resumen de Comisión:")
-            p.setFont("Helvetica", 10)
-            p.drawString(50, height - 245, f"Ventas Completadas: {ventas.count()}")
-            p.drawString(50, height - 260, f"Total Comisión: ${total_comision:.2f}")
-            
-            # --- Detalle de las ventas (tabla) ---
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(50, height - 290, "Detalle de Ventas:")
-            
-            # Definir datos para la tabla
-            data = [["Fecha", "Recibo #", "Cliente", "Total Venta", "% Comisión", "Comisión"]]
-            
-            for venta in ventas_detalle:
-                data.append([
-                    venta['factura'].fecha_fac.strftime("%d/%m/%Y"),
-                    f"{venta['factura'].id}",
-                    f"{venta['factura'].cliente.nombre} {venta['factura'].cliente.apellido}",
-                    f"${venta['factura'].total_fac:.2f}",
-                    f"{venta['porcentaje']}%",
-                    f"${venta['comision']:.2f}"
-                ])
-            
-            # Si no hay ventas, añadir una fila de "Sin datos"
-            if len(data) == 1:
-                data.append(["Sin datos", "", "", "", "", ""])
-            
-            # Configurar ancho de columnas
-            col_widths = [70, 60, 150, 80, 80, 80]
-            
-            # Crear y configurar la tabla
-            table = Table(data, colWidths=col_widths)
-            table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                ('ALIGN', (3, 1), (5, -1), 'RIGHT'),  # Alinear columnas numéricas a la derecha
-                ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ]))
-            
-            # Calcular posición de la tabla
-            table_height = len(data) * 20  # Estimación aproximada
-            table_y = height - 320 - table_height  # Ajustar según necesidad
-            
-            # Dibujar la tabla
-            table.wrapOn(p, width - 100, table_height)
-            table.drawOn(p, 50, max(table_y, 100))  # Mínimo 100 para evitar que se salga
-            
-            # --- Información adicional ---
-            # Si hay espacio, añadir información de rangos de comisión
-            rangos = ConsultaComision.objects.all().order_by('rango_inferior')
-            if rangos.exists() and table_y > 150:
-                p.setFont("Helvetica-Bold", 10)
-                p.drawString(50, table_y - 30, "Rangos de Comisión:")
-                
-                y_pos = table_y - 50
-                p.setFont("Helvetica", 9)
-                for i, rango in enumerate(rangos):
-                    p.drawString(50, y_pos - (i * 15), 
-                                f"${rango.rango_inferior:.2f} a ${rango.rango_superior:.2f}: {rango.porcentaje}%")
-            
-            # --- Pie de página ---
-            p.setFont("Helvetica", 8)
-            p.drawString(470, 30, f"Página 1 de 1")
-            p.drawString(40, 30, "The Black System - Todos los derechos reservados")
-            
-            # Finalizar y devolver PDF
-            p.showPage()
-            p.save()
-            buffer.seek(0)
-            response = HttpResponse(buffer, content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="Comision_{empleado.nombre}_{empleado.apellido}_{fecha_actual}.pdf"'
-            return response
-        
-        except Exception as e:
-            messages.error(request, f'Error al generar el PDF: {str(e)}')
-            return redirect('black_invoices:comision_list')
         
     
 from django.http import HttpResponse, JsonResponse

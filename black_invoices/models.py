@@ -108,7 +108,12 @@ class Producto(models.Model):
     PRECIO_MAXIMO = 5000.00
     STOCK_MINIMO = 0
     STOCK_MAXIMO = 100000
-
+    sku = models.CharField(
+        max_length=50, 
+        unique=True, 
+        verbose_name="SKU/Código",
+        help_text="Código único del producto"
+    )
     nombre = models.CharField(
         max_length=50,
         verbose_name="Nombre",
@@ -379,144 +384,6 @@ class Empleado(models.Model):
     def __str__(self):
         return f"{self.nombre} {self.apellido}"
     
-    def get_comisiones_mes(self, mes, anio):
-        """Calcular comisiones solo de ventas completadas"""
-        from decimal import Decimal
-        
-        total = Decimal('0.00')
-        # Obtener ventas del mes donde el empleado fue vendedor
-        ventas = Ventas.objects.filter(
-            empleado=self,
-            factura__fecha_fac__month=mes,
-            factura__fecha_fac__year=anio
-        ).exclude(
-            status__vent_cancelada=True
-        )
-        
-        for venta in ventas:
-            # Solo calcular comisión si la venta está completada
-            completada = False
-            if hasattr(venta, 'completada'):
-                completada = venta.completada
-            else:
-                # Verificar manualmente si la venta está completada
-                completada = not venta.credito or venta.monto_pagado >= venta.factura.total_fac
-            
-            if completada:
-                # Buscar el porcentaje en la tabla de rangos de comisión
-                total_factura = venta.factura.total_fac
-                rango_comision = ConsultaComision.objects.filter(
-                    rango_inferior__lte=total_factura,
-                    rango_superior__gte=total_factura
-                ).first()
-                
-                if rango_comision:
-                    # Calcular comisión basada en el monto de la venta
-                    comision = total_factura * rango_comision.porcentaje / Decimal('100.00')
-                    total += comision
-        
-        return total
-class ConsultaComision(models.Model):
-    rango_inferior = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        verbose_name="Rango Inferior"
-    )
-    rango_superior = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        verbose_name="Rango Superior"
-    )
-    porcentaje = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        verbose_name="Porcentaje de Comisión"
-    )
-
-    class Meta:
-        verbose_name = "Rango de Comisión"
-        verbose_name_plural = "Rangos de Comisiones"
-        ordering = ['rango_inferior']
-
-    def __str__(self):
-        return f"{self.porcentaje}% para ventas entre ${self.rango_inferior} y ${self.rango_superior}"
-    
-    def calcular_comision(self, monto_venta):
-        """Calcula la comisión para un monto de venta"""
-        if self.rango_inferior <= monto_venta <= self.rango_superior:
-            return (monto_venta * self.porcentaje) / 100
-        return 0
-    
-class Comision(models.Model):
-    empleado = models.ForeignKey(
-        'Empleado',
-        on_delete=models.PROTECT,
-        verbose_name="Empleado"
-    )
-    monto_venta = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        verbose_name="Monto de venta"
-    )
-    fecha_comision = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="Fecha de Comisión"
-    )
-    venta = models.OneToOneField(
-        'Ventas',
-        on_delete=models.PROTECT,
-        verbose_name="Venta Asociada"
-    )
-    total_comision = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        verbose_name="Total de Comisión",
-        editable=False  # No se puede editar manualmente
-    )
-    
-
-    class Meta:
-        verbose_name = "Comisión"
-        verbose_name_plural = "Comisiones"
-        ordering = ['-fecha_comision']  # Ordenar por fecha descendente (más reciente primero)
-
-    def __str__(self):
-        return f"Comisión de {self.empleado} - ${self.total_comision}"
-
-    def save(self, *args, **kwargs):
-        """
-        Sobrescribimos el método save para calcular automáticamente 
-        la comisión antes de guardar
-        """
-        if not self.total_comision:
-        # Obtenemos el total de la factura
-            monto_venta = self.venta.factura.total_fac
-            
-            rango = ConsultaComision.objects.filter(
-                rango_inferior__lte=monto_venta,
-                rango_superior__gte=monto_venta
-            ).first()
-            
-            if rango:
-                self.total_comision = rango.calcular_comision(monto_venta)
-            else:
-                self.total_comision = 0
-
-        super().save(*args, **kwargs)
-
-    def get_mes_actual(self):
-        """
-        Obtiene el total de comisiones del mes actual para este empleado
-        """
-        mes_actual = self.fecha_comision.month
-        año_actual = self.fecha_comision.year
-        return Comision.objects.filter(
-            empleado=self.empleado,
-            fecha_comision__month=mes_actual,
-            fecha_comision__year=año_actual
-        ).aggregate(
-            total=models.Sum('total_comision')
-        )['total'] or 0
     
     
 class Ventas(models.Model):
@@ -542,39 +409,7 @@ class Ventas(models.Model):
     credito = models.BooleanField(default=False, verbose_name="Venta a Crédito")
     monto_pagado = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Monto Pagado")
     
-    # NUEVOS CAMPOS PARA AUTORIZACIÓN
-    requiere_autorizacion = models.BooleanField(
-        default=True, 
-        verbose_name="Requiere Autorización"
-    )
-    autorizada = models.BooleanField(
-        default=False, 
-        verbose_name="Venta Autorizada"
-    )
-    autorizada_por = models.ForeignKey(
-        'Empleado',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='ventas_autorizadas',
-        verbose_name="Autorizada por"
-    )
-    fecha_autorizacion = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name="Fecha de Autorización"
-    )
-    comentarios_autorizacion = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name="Comentarios de Autorización"
-    )
-    # requiere_autorizacion = models.BooleanField(default=True, verbose_name="Requiere Autorización")
-    # autorizada = models.BooleanField(default=False, verbose_name="Venta Autorizada")
-    # autorizada_por = models.ForeignKey('Empleado', on_delete=models.SET_NULL, null=True, blank=True, related_name='ventas_autorizadas', verbose_name="Autorizada por")
-    # fecha_autorizacion = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de Autorización")
-    # comentarios_autorizacion = models.TextField(blank=True, null=True, verbose_name="Comentarios de Autorización")
-    
+        
     class Meta:
         verbose_name = "Venta"
         verbose_name_plural = "Ventas"
@@ -582,6 +417,35 @@ class Ventas(models.Model):
 
     def __str__(self):
         return f"Venta {self.id} - {self.empleado}"
+    
+
+    def procesar_venta(self):
+        from django.db import transaction
+    
+        with transaction.atomic():
+            # Descontar stock inmediatamente
+            detalles = self.factura.detallefactura_set.all()
+            for detalle in detalles:
+                if detalle.cantidad > detalle.producto.stock:
+                    raise ValueError(f"Stock insuficiente para {detalle.producto.nombre}")
+                
+                detalle.producto.stock -= detalle.cantidad
+                detalle.producto.save(update_fields=['stock'])
+            
+            # Establecer estado según tipo de venta
+            if self.credito:
+                if self.monto_pagado <= 0:
+                    self.status = StatusVentas.objects.get(nombre="Pendiente")
+                else:
+                    self.status = StatusVentas.objects.get(
+                        nombre="Completada" if self.completada else "Pendiente"
+                    )
+            else:
+                # Contado = pagado completo
+                self.status = StatusVentas.objects.get(nombre="Completada")
+                self.monto_pagado = self.factura.total_fac
+            
+            self.save()
 
     def registrar_pago(self, monto, metodo_pago='efectivo', referencia_pago=None):
         """Registra un pago parcial con validaciones de autorización"""
@@ -590,8 +454,6 @@ class Ventas(models.Model):
         from django.db import transaction
         
         # VALIDACIÓN: Solo ventas autorizadas pueden recibir pagos
-        if not self.autorizada:
-            raise ValueError("No se pueden registrar pagos en ventas no autorizadas")
         
         # VALIDACIÓN: Solo ventas a crédito pueden recibir pagos parciales
         if not self.credito:
@@ -693,112 +555,23 @@ class Ventas(models.Model):
         
         return resumen
 
-    def autorizar_venta(self, empleado_autorizador, comentarios=""):
-        """Autoriza la venta, descuenta stock y cambia su estado"""
-        from django.utils import timezone
+    def cancelar_venta(self):
+        """Cancela la venta y restaura el stock"""
         from django.db import transaction
-        
-        if empleado_autorizador.nivel_acceso.nombre not in ['Administrador', 'Supervisor']:
-            raise ValueError("Solo administradores o supervisores pueden autorizar ventas")
-        
-        if self.autorizada:
-            raise ValueError("Esta venta ya está autorizada")
-        
-        with transaction.atomic():
-            # DESCONTAR STOCK AL AUTORIZAR
-            detalles = self.factura.detallefactura_set.all()
-            for detalle in detalles:
-                # Verificar stock nuevamente al momento de autorizar
-                if detalle.cantidad > detalle.producto.stock:
-                    raise ValueError(f"Stock insuficiente para {detalle.producto.nombre}. "
-                                f"Disponible: {detalle.producto.stock}, Requerido: {detalle.cantidad}")
-                
-                # Descontar stock
-                detalle.producto.stock -= detalle.cantidad
-                detalle.producto.save(update_fields=['stock'])
-            
-            # Marcar como autorizada
-            self.autorizada = True
-            self.autorizada_por = empleado_autorizador
-            self.fecha_autorizacion = timezone.now()
-            self.comentarios_autorizacion = comentarios
-            
-            # Cambiar estado según el tipo de venta
-            if self.credito:
-                # Si es crédito y no tiene pagos, va a pendiente
-                if self.monto_pagado <= 0:
-                    estado_nuevo = StatusVentas.objects.get(nombre="Pendiente")
-                else:
-                    # Si ya tiene pagos, verificar si está completada
-                    estado_nuevo = StatusVentas.objects.get(
-                        nombre="Completada" if self.completada else "Pendiente"
-                    )
-            else:
-                # Si es contado, va directo a completada y se marca como pagada
-                estado_nuevo = StatusVentas.objects.get(nombre="Completada")
-                self.monto_pagado = self.factura.total_fac
-            
-            self.status = estado_nuevo
-            self.save()
-        
-        return True
-        
-    def rechazar_venta(self, empleado_autorizador, comentarios=""):
-        """Rechaza la venta (no se descuenta stock porque nunca se descontó)"""
-        from django.utils import timezone
-        
-        if empleado_autorizador.nivel_acceso.nombre not in ['Administrador', 'Supervisor']:
-            raise ValueError("Solo administradores o supervisores pueden rechazar ventas")
-        
-        if self.autorizada:
-            raise ValueError("No se puede rechazar una venta ya autorizada")
-        
-        # NO necesitamos restaurar stock porque nunca se descontó
-        # Solo marcamos como rechazada
-        
-        self.autorizada = False
-        self.autorizada_por = empleado_autorizador
-        self.fecha_autorizacion = timezone.now()
-        self.comentarios_autorizacion = f"RECHAZADA: {comentarios}"
-        
-        # Cambiar a estado cancelada
-        estado_cancelado = StatusVentas.objects.get(vent_cancelada=True)
-        self.status = estado_cancelado
-        self.save()
-    
-        return True
-
-    def cancelar_venta_autorizada(self, empleado_cancelador, comentarios=""):
-        """Cancela una venta YA AUTORIZADA y restaura el stock"""
-        from django.utils import timezone
-        from django.db import transaction
-        
-        if empleado_cancelador.nivel_acceso.nombre not in ['Administrador', 'Supervisor']:
-            raise ValueError("Solo administradores o supervisores pueden cancelar ventas autorizadas")
-        
-        if not self.autorizada:
-            # Si no está autorizada, usar rechazar_venta en su lugar
-            return self.rechazar_venta(empleado_cancelador, comentarios)
         
         if self.status.vent_cancelada:
             raise ValueError("Esta venta ya está cancelada")
         
         with transaction.atomic():
-            # RESTAURAR STOCK (porque ya se había descontado al autorizar)
+            # Restaurar stock
             detalles = self.factura.detallefactura_set.all()
             for detalle in detalles:
                 detalle.producto.stock += detalle.cantidad
                 detalle.producto.save(update_fields=['stock'])
             
             # Marcar como cancelada
-            self.comentarios_autorizacion += f"\nCANCELADA el {timezone.now().strftime('%d/%m/%Y %H:%M')} por {empleado_cancelador.nombre}: {comentarios}"
-            
-            # Cambiar a estado cancelada
-            estado_cancelado = StatusVentas.objects.get(vent_cancelada=True)
-            self.status = estado_cancelado
+            self.status = StatusVentas.objects.get(vent_cancelada=True)
             self.save()
-    
-        return True
     @property
     def saldo_pendiente(self):
         """Calcula el saldo pendiente de pago para ventas a crédito"""
@@ -813,17 +586,6 @@ class Ventas(models.Model):
             return True  # Las ventas de contado están completadas por definición
         return self.monto_pagado >= self.factura.total_fac
     
-    @property
-    def estado_autorizacion(self):
-        """Retorna el estado de autorización de la venta"""
-        if not self.requiere_autorizacion:
-            return "No requiere autorización"
-        elif self.autorizada:
-            return "Autorizada"
-        elif self.status.vent_cancelada and self.autorizada_por:
-            return "Rechazada"
-        else:
-            return "Pendiente de autorización"
 
 class PagoVenta(models.Model):
     METODOS_PAGO_CHOICES = [
@@ -891,14 +653,7 @@ class StatusVentas(models.Model):
         elif self.vent_espera:
             return "EN ESPERA"
         return "COMPLETADA"
-    def crear_estado_pendiente_autorizacion():
-        StatusVentas.objects.get_or_create(
-        nombre="Pendiente de Autorización",
-        defaults={
-            'vent_espera': True,
-            'vent_cancelada': False
-        }
-    )
+    
     
 class Factura(models.Model):
     METODO_PAGO_CHOICES = [
@@ -1160,56 +915,6 @@ class TipoFactura(models.Model):
         if self.credito_fac:
             return f"Crédito - {self.get_plazo_credito_display()}"
         return "Contado"
-    
-class TablaConfig(models.Model):
-    empleado = models.ForeignKey(
-        'Empleado',
-        on_delete=models.PROTECT,
-        verbose_name="Empleado"
-    )
-    monto_fact = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        verbose_name="Monto Factura"
-    )
-    porcent_comis = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        verbose_name="Porcentaje Comisión"
-    )
-    fecha_config = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="Fecha de Configuración"
-    )
-    activo = models.BooleanField(
-        default=True,
-        verbose_name="Configuración Activa"
-    )
-
-    class Meta:
-        verbose_name = "Configuración"
-        verbose_name_plural = "Configuraciones"
-        ordering = ['-fecha_config']
-
-    def __str__(self):
-        return f"Config {self.empleado} - {self.porcent_comis}%"
-
-    def aplicar_comision(self, monto_venta):
-        """Calcula la comisión según la configuración"""
-        if monto_venta >= self.monto_fact:
-            return (monto_venta * self.porcent_comis) / 100
-        return 0
-    
-    # @classmethod
-    # def get_tasa_actual(cls):
-    #     """Obtiene la tasa de cambio más reciente y activa"""
-    #     return cls.objects.filter(activa=True).first()
-    
-    # def save(self, *args, **kwargs):
-    #     # Si esta tasa se marca como activa, desactivar las demás
-    #     if self.activa:
-    #         TasaCambio.objects.filter(activa=True).update(activa=False)
-    #     super().save(*args, **kwargs)
 
 class UnidadMedida(models.Model):
     """
