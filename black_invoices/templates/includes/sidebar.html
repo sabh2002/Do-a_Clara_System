@@ -160,17 +160,7 @@
                                 <p>Registrar venta</p>
                             </a>
                         </li>
-                        {% if user.empleado.nivel_acceso.nombre in 'Administrador,Supervisor' %}
-                        <li class="nav-item">
-                            <a href="{% url 'black_invoices:ventas_autorizacion' %}" class="nav-link">
-                                <i class="fas fa-user-check"></i>
-                                <p>Autorizar Ventas
-                                    {% comment %} Opcional: Badge con cantidad pendiente {% endcomment %}
-                                    <span class="badge badge-warning">{{ ventas_pendientes_count }}</span>
-                                </p>
-                            </a>
-                        </li>
-                        {% endif %}
+                        
 
                         <!-- <li class="nav-item">
                             <a href="#" class="nav-link">
