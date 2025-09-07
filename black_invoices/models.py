@@ -1330,11 +1330,3 @@ class DetalleNotaEntrega(models.Model):
         # Actualizar totales de la nota
         self.nota_entrega.calcular_totales()
 
-class NotaEntrega(models.Model):
-    numero_nota = models.PositiveIntegerField(unique=True)
-    cliente = models.ForeignKey('Cliente', on_delete=models.PROTECT)
-    fecha_entrega = models.DateTimeField(auto_now_add=True)
-    convertida_a_factura = models.BooleanField(default=False)
-    factura_relacionada = models.OneToOneField(
-        'Factura', null=True, blank=True, on_delete=models.SET_NULL
-    )
