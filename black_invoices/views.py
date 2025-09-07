@@ -1452,3 +1452,21 @@ class TasaCambioUpdateView(EmpleadoRolMixin, UpdateView):
     def form_valid(self, form):
         messages.success(self.request, 'Tasa de cambio actualizada exitosamente')
         return super().form_valid(form)
+
+
+class ProductoSearchAPIView(View):
+    def get(self, request):
+        query = request.GET.get('q', '')
+        productos = Producto.objects.filter(
+            Q(nombre__icontains=query) | Q(sku__icontains=query)
+        ).filter(stock__gt=0)[:10]
+        
+        data = [{
+            'id': p.id,
+            'text': f"{p.sku} - {p.nombre}",
+            'precio': float(p.precio),
+            'stock': float(p.stock),
+            'unidad': p.unidad_medida.abreviatura if p.unidad_medida else 'UN'
+        } for p in productos]
+        
+        return JsonResponse({'results': data})

@@ -159,10 +159,18 @@ const tasaCambio = 1; // Por ahora usar 1 para debug
 console.log('Script cargado, tasa de cambio:', tasaCambio);
 
 // Función para formatear números como moneda USD
-function formatCurrency(value) {
-    return '$' + parseFloat(value).toFixed(2);
+function formatCurrency(value, decimals = 4) {
+    const num = parseFloat(value) || 0;
+    return '$' + num.toFixed(decimals);
 }
-
+function updateProductPrice(productSelect) {
+    const precio = parseFloat(productSelect.dataset.precio) || 0;
+    if (precio < 1) {
+        // Para precios menores a $1, mostrar 4 decimales
+        return formatCurrency(precio, 4);
+    }
+    return formatCurrency(precio, 2);
+}
 // Función para formatear bolívares
 function formatBolivares(value) {
     return parseFloat(value).toFixed(2) + ' Bs';

@@ -447,7 +447,7 @@ class Ventas(models.Model):
             
             self.save()
 
-    def registrar_pago(self, monto, metodo_pago='efectivo', referencia_pago=None):
+    def registrar_pago(self, monto, metodo_pago='efectivo', referencia=None):
         """Registra un pago parcial con validaciones de autorización"""
         from decimal import Decimal
         from django.utils import timezone
@@ -496,7 +496,7 @@ class Ventas(models.Model):
                 venta=self,
                 monto=monto,
                 metodo_pago=metodo_pago,
-                referencia_pago=referencia_pago if referencia_pago else None
+                referencia=referencia if referencia else None
             )
         
         return pago
@@ -526,7 +526,7 @@ class Ventas(models.Model):
             venta=self,
             monto=monto,
             metodo_pago=metodo_pago,
-            referencia=referencia,
+            h=referencia,
             fecha=timezone.now()
         )
         
@@ -1329,3 +1329,12 @@ class DetalleNotaEntrega(models.Model):
         
         # Actualizar totales de la nota
         self.nota_entrega.calcular_totales()
+
+class NotaEntrega(models.Model):
+    numero_nota = models.PositiveIntegerField(unique=True)
+    cliente = models.ForeignKey('Cliente', on_delete=models.PROTECT)
+    fecha_entrega = models.DateTimeField(auto_now_add=True)
+    convertida_a_factura = models.BooleanField(default=False)
+    factura_relacionada = models.OneToOneField(
+        'Factura', null=True, blank=True, on_delete=models.SET_NULL
+    )
