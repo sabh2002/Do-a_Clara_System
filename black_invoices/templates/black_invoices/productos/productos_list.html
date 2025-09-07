@@ -51,6 +51,7 @@
             <thead>
                 <tr>
                     <th>#</th>
+                    <th>SKU</th>
                     <th>Nombre</th>
                     <th>Precio</th>
                     <th>Stock</th>
@@ -63,6 +64,7 @@
                 {% for producto in productos %}
                 <tr>
                     <td>{{ producto.id }}</td>
+                    <td>{{ producto.sku }}</td>
                     <td>{{ producto.nombre }}</td>
                     
                     <td>

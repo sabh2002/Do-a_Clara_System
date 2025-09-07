@@ -682,7 +682,7 @@ class VentaCreateView(LoginRequiredMixin, View):
                 
                 # 7. Crear la venta y establecer estado según tipo
                 # Asegurar que los estados existan
-                try:
+                """ try:
                     if es_credito:
                         estado = StatusVentas.objects.get(nombre="Pendiente")
                     else:
@@ -700,7 +700,23 @@ class VentaCreateView(LoginRequiredMixin, View):
                             nombre="Completada",
                             vent_espera=False,
                             vent_cancelada=False
-                        )
+                        ) """
+                if es_credito:
+                    estado, created = StatusVentas.objects.get_or_create(
+                        nombre="Pendiente",
+                        defaults={
+                            'vent_espera': True,
+                            'vent_cancelada': False
+                        }
+                    )
+                else:
+                    estado, created = StatusVentas.objects.get_or_create(
+                        nombre="Completada",
+                        defaults={
+                            'vent_espera': False,
+                            'vent_cancelada': False
+                        }
+    )
                 
                 venta = Ventas.objects.create(
                     empleado=factura.empleado,

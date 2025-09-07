@@ -155,13 +155,21 @@
 
 <script>
 // Tasa de cambio desde el backend - SIMPLIFICADO
-const tasaCambio = 1; // Por ahora usar 1 para debug
+const tasaCambio = parseFloat('{{ tasa_cambio|default:"1" }}') || 1; // Por ahora usar 1 para debug
+// const tasaCambio = {{ tasa_cambio|floatformat:4 }};
 console.log('Script cargado, tasa de cambio:', tasaCambio);
 
 // Función para formatear números como moneda USD
-function formatCurrency(value, decimals = 4) {
+function formatCurrency(value, forceDecimals = null) {
     const num = parseFloat(value) || 0;
-    return '$' + num.toFixed(decimals);
+    
+    if (forceDecimals === null) {
+        if (num < 0.01) return '$' + num.toFixed(4);
+        if (num < 1) return '$' + num.toFixed(3);
+        return '$' + num.toFixed(2);
+    }
+    
+    return '$' + num.toFixed(forceDecimals);
 }
 function updateProductPrice(productSelect) {
     const precio = parseFloat(productSelect.dataset.precio) || 0;
@@ -201,7 +209,8 @@ function handleProductChange(event) {
     
     if (select.selectedIndex > 0) {
         const selectedOption = select.options[select.selectedIndex];
-        const price = parseFloat(selectedOption.getAttribute('data-precio')) || 0;
+        const price = parseFloat(selectedOption.getAttribute('data-precio').replace(',', '.')) || 0;
+
         const stock = parseFloat(selectedOption.getAttribute('data-stock')) || 0;
         const unidad = selectedOption.getAttribute('data-unidad') || 'unidad';
         
@@ -211,7 +220,8 @@ function handleProductChange(event) {
             // Actualizar precio mostrado
             const priceBs = price * tasaCambio;
             if (priceCell) {
-                priceCell.innerHTML = `<strong>$${price.toFixed(2)}</strong><br><small class="text-muted">${priceBs.toFixed(2)} Bs</small>`;
+                const priceFormatted = formatCurrency(price);
+                priceCell.innerHTML = `<strong>${priceFormatted}</strong><br><small class="text-muted">${priceBs.toFixed(2)} Bs</small>`;
                 console.log('Precio actualizado a:', price);
             }
             
@@ -270,7 +280,7 @@ function updateSubtotal(row) {
     // Extraer precio USD del HTML
     const priceStrongElement = priceCell.querySelector('strong');
     const priceText = priceStrongElement ? priceStrongElement.textContent : '$0.00';
-    const price = parseFloat(priceText.replace('$', '')) || 0;
+    const price = parseFloat(priceText.replace('$', '').replace(',', '.')) || 0;
     const quantity = parseFloat(quantityInput.value) || 0;
     
     console.log('Calculando subtotal:', { price, quantity });
@@ -279,7 +289,8 @@ function updateSubtotal(row) {
     const subtotalBs = subtotalUSD * tasaCambio;
     
     if (subtotalCell) {
-        subtotalCell.innerHTML = `<strong>$${subtotalUSD.toFixed(2)}</strong><br><small class="text-muted">${subtotalBs.toFixed(2)} Bs</small>`;
+        const subtotalFormatted = formatCurrency(subtotalUSD);
+        subtotalCell.innerHTML = `<strong>${subtotalFormatted}</strong><br><small class="text-muted">${subtotalBs.toFixed(2)} Bs</small>`;;
         console.log('Subtotal actualizado:', subtotalUSD);
     }
     

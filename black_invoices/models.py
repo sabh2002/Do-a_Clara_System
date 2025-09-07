@@ -526,7 +526,7 @@ class Ventas(models.Model):
             venta=self,
             monto=monto,
             metodo_pago=metodo_pago,
-            h=referencia,
+            referencia=referencia,
             fecha=timezone.now()
         )
         
