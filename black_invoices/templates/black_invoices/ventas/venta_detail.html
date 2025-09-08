@@ -7,17 +7,29 @@
         <!-- Información General -->
         <div class="card">
             <div class="card-header">
-                <h3 class="card-title">Información General</h3>
+                <h3 class="card-title">
+                    {{ venta.tipo_documento }} #{{ venta.numero_documento }}
+                    {% if venta.nota_entrega and not venta.nota_entrega.convertida_a_factura %}
+                    <span class="badge badge-warning ml-2">Nota de Entrega - Pendiente de Facturación</span>
+                    {% elif venta.factura %}
+                    <span class="badge badge-success ml-2">Factura Fiscal</span>
+                    {% endif %}
+                </h3>
                 <div class="card-tools">
                     <a href="{% url 'black_invoices:venta_list' %}" class="btn btn-default">
                         <i class="fas fa-arrow-left"></i> Volver
                     </a>
-                    <a href="{% url 'black_invoices:factura_pdf' venta.factura.id %}" class="btn btn-primary" target="_blank">
-                        <i class="fas fa-file-pdf"></i> Generar PDF
+                    {% if venta.factura %}
+                    <a href="{% url 'black_invoices:factura_pdf' venta.factura.id %}" class="btn btn-primary"
+                        target="_blank">
+                        <i class="fas fa-file-pdf"></i> Generar PDF Factura
                     </a>
-                    <!-- <button type="button" class="btn btn-secondary" onclick="window.print();">
-                        <i class="fas fa-print"></i> Imprimir
-                    </button> -->
+                    {% elif venta.nota_entrega %}
+                    <a href="{% url 'black_invoices:nota_entrega_pdf' venta.nota_entrega.id %}" class="btn btn-info"
+                        target="_blank">
+                        <i class="fas fa-file-pdf"></i> PDF Nota de Entrega
+                    </a>
+                    {% endif %}
                     {% if not venta.status.vent_cancelada %}
                     <a href="{% url 'black_invoices:cancelar_venta' venta.id %}" class="btn btn-danger"
                         onclick="return confirm('¿Está seguro de cancelar esta venta? Se restaurará el stock.');">
@@ -40,21 +52,44 @@
                                 <td>{{ venta.fecha_venta|date:"d/m/Y H:i" }}</td>
                             </tr>
                             <tr>
+                                <th>Tipo de Documento:</th>
+                                <td>{{ venta.tipo_documento }}</td>
+                            </tr>
+                            <tr>
                                 <th>Estado:</th>
                                 <td>
                                     {% if venta.status.vent_cancelada %}
                                     <span class="badge badge-danger">Cancelada</span>
-                                    {% elif venta.status.vent_espera %}
-                                    <span class="badge badge-warning">En Espera</span>
+                                    {% elif venta.credito %}
+                                    {% if venta.completada %}
+                                    <span class="badge badge-success">Pagada</span>
                                     {% else %}
-                                    <span class="badge badge-success">Completada</span>
+                                    <span class="badge badge-warning">Pendiente de Pago</span>
+                                    {% endif %}
+                                    {% else %}
+                                    <span class="badge badge-info">Contado - Completada</span>
                                     {% endif %}
                                 </td>
                             </tr>
                             <tr>
                                 <th>Total:</th>
-                                <td>${{ venta.factura.total_fac }}</td>
+                                <td>${{ venta.total_venta|floatformat:2 }}</td>
                             </tr>
+                            {% if venta.credito %}
+                            <tr>
+                                <th>Monto Pagado:</th>
+                                <td>${{ venta.monto_pagado|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <th>Saldo Pendiente:</th>
+                                <td>
+                                    <strong
+                                        class="{% if venta.saldo_pendiente > 0 %}text-danger{% else %}text-success{% endif %}">
+                                        ${{ venta.saldo_pendiente|floatformat:2 }}
+                                    </strong>
+                                </td>
+                            </tr>
+                            {% endif %}
                         </table>
                     </div>
                     <div class="col-md-6">
@@ -62,19 +97,43 @@
                         <table class="table table-striped">
                             <tr>
                                 <th>Cliente:</th>
-                                <td>{{ venta.factura.cliente.nombre }} {{ venta.factura.cliente.apellido }}</td>
+                                <td>
+                                    {% if venta.factura %}
+                                    {{ venta.factura.cliente.nombre }} {{ venta.factura.cliente.apellido }}
+                                    {% elif venta.nota_entrega %}
+                                    {{ venta.nota_entrega.cliente.nombre }} {{ venta.nota_entrega.cliente.apellido }}
+                                    {% endif %}
+                                </td>
                             </tr>
                             <tr>
                                 <th>Email:</th>
-                                <td>{{ venta.factura.cliente.email }}</td>
+                                <td>
+                                    {% if venta.factura %}
+                                    {{ venta.factura.cliente.email|default:"No registrado" }}
+                                    {% elif venta.nota_entrega %}
+                                    {{ venta.nota_entrega.cliente.email|default:"No registrado" }}
+                                    {% endif %}
+                                </td>
                             </tr>
                             <tr>
                                 <th>Teléfono:</th>
-                                <td>{{ venta.factura.cliente.telefono }}</td>
+                                <td>
+                                    {% if venta.factura %}
+                                    {{ venta.factura.cliente.telefono }}
+                                    {% elif venta.nota_entrega %}
+                                    {{ venta.nota_entrega.cliente.telefono }}
+                                    {% endif %}
+                                </td>
                             </tr>
                             <tr>
                                 <th>Dirección:</th>
-                                <td>{{ venta.factura.cliente.direccion }}</td>
+                                <td>
+                                    {% if venta.factura %}
+                                    {{ venta.factura.cliente.direccion }}
+                                    {% elif venta.nota_entrega %}
+                                    {{ venta.nota_entrega.cliente.direccion }}
+                                    {% endif %}
+                                </td>
                             </tr>
                         </table>
                     </div>
@@ -92,58 +151,110 @@
                     <thead>
                         <tr>
                             <th>Producto</th>
-                            <th>Precio</th>
+                            <th>Precio Unitario</th>
                             <th>Cantidad</th>
-                            <th>Tipo Factura</th>
+                            <th>Unidad</th>
                             <th>Subtotal</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for detalle in detalles %}
                         <tr>
+                            {% if venta.factura %}
+                            <!-- Detalles de Factura -->
                             <td>{{ detalle.producto.nombre }}</td>
-                            <td>${{ detalle.producto.precio }}</td>
+                            <td>${{ detalle.producto.precio|floatformat:2 }}</td>
                             <td>{{ detalle.cantidad }}</td>
-                            <td>{{ detalle.tipo_factura }}</td>
-                            <td>${{ detalle.sub_total }}</td>
+                            <td>{{ detalle.producto.unidad_medida|default:"UN" }}</td>
+                            <td>${{ detalle.sub_total|floatformat:2 }}</td>
+                            {% elif venta.nota_entrega %}
+                            <!-- Detalles de Nota de Entrega -->
+                            <td>{{ detalle.producto.nombre }}</td>
+                            <td>${{ detalle.precio_unitario|floatformat:2 }}</td>
+                            <td>{{ detalle.cantidad }}</td>
+                            <td>{{ detalle.producto.unidad_medida|default:"UN" }}</td>
+                            <td>${{ detalle.subtotal_linea|floatformat:2 }}</td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot>
                         <tr>
                             <th colspan="4" class="text-right">Total:</th>
-                            <th>${{ venta.factura.total_fac }}</th>
+                            <th>${{ venta.total_venta|floatformat:2 }}</th>
                         </tr>
                     </tfoot>
                 </table>
             </div>
         </div>
 
-        <!-- Información de Comisión -->
-        {% if comision %}
+        <!-- Información de Pagos (solo para crédito) -->
+        {% if venta.credito and pagos %}
         <div class="card">
             <div class="card-header">
-                <h3 class="card-title">Comisión Generada</h3>
+                <h3 class="card-title">Historial de Pagos</h3>
             </div>
             <div class="card-body">
                 <table class="table table-striped">
-                    <tr>
-                        <th>Empleado:</th>
-                        <td>{{ venta.empleado.nombre }} {{ venta.empleado.apellido }}</td>
-                    </tr>
-                    <tr>
-                        <th>Monto de venta:</th>
-                        <td>${{ comision.monto_venta }}</td>
-                    </tr>
-                    <tr>
-                        <th>Comisión generada:</th>
-                        <td>${{ comision.total_comision }}</td>
-                    </tr>
-                    <tr>
-                        <th>Fecha:</th>
-                        <td>{{ comision.fecha_comision|date:"d/m/Y H:i" }}</td>
-                    </tr>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Monto</th>
+                            <th>Método</th>
+                            <th>Referencia</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pago in pagos %}
+                        <tr>
+                            <td>{{ pago.fecha|date:"d/m/Y H:i" }}</td>
+                            <td>${{ pago.monto|floatformat:2 }}</td>
+                            <td>{{ pago.get_metodo_pago_display }}</td>
+                            <td>{{ pago.referencia|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
                 </table>
+
+                <!-- Resumen de pagos por método -->
+                {% if resumen_pagos %}
+                <h6 class="mt-3">Resumen por Método de Pago:</h6>
+                <div class="row">
+                    {% for metodo, datos in resumen_pagos.items %}
+                    <div class="col-md-4">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-info">
+                                <i class="fas fa-dollar-sign"></i>
+                            </span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">{{ datos.nombre }}</span>
+                                <span class="info-box-number">${{ datos.total|floatformat:2 }}</span>
+                                <span class="progress-description">{{ datos.pagos }} pago{{ datos.pagos|pluralize
+                                    }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Información de Conversión (para notas convertidas) -->
+        {% if venta.nota_entrega and venta.nota_entrega.convertida_a_factura and venta.factura %}
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h3 class="card-title">
+                    <i class="fas fa-exchange-alt"></i> Conversión a Factura Fiscal
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    Esta Nota de Entrega #{{ venta.nota_entrega.numero_nota }} fue convertida exitosamente
+                    a Factura Fiscal #{{ venta.factura.numero_factura }} al completarse el pago.
+                </div>
             </div>
         </div>
         {% endif %}

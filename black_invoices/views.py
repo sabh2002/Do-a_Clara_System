@@ -575,7 +575,7 @@ class VentaCreateView(LoginRequiredMixin, View):
         context = {
             'titulo': 'Crear Venta',
             'clientes': Cliente.objects.all(),
-            'productos': Producto.objects.filter(activo=True, stock__gt=0),  # Solo productos activos con stock
+            'productos': Producto.objects.filter(activo=True, stock__gt=0),
             'opciones_venta': [
                 {'id': 'contado', 'nombre': 'Contado'},
                 {'id': 'credito', 'nombre': 'Crédito'}
@@ -617,90 +617,17 @@ class VentaCreateView(LoginRequiredMixin, View):
                                     'cantidad': cantidad
                                 })
                         except ValueError:
-                            continue  # Ignorar cantidades inválidas
+                            continue
                 
                 if not productos:
                     messages.error(request, 'Debe agregar al menos un producto a la venta.')
                     return redirect('black_invoices:venta_create')
                 
-                # 4. Crear la factura
+                # 4. Determinar tipo de venta
                 cliente = Cliente.objects.get(pk=cliente_id)
-                factura = Factura(
-                    cliente=cliente,
-                    empleado=request.user.empleado,
-                    metodo_pag=metodo_pago
-                )
-                factura.save()
-                
-                # 5. Procesar los productos
-                total_factura = 0
                 es_credito = request.POST.get('tipo_venta') == 'credito'
                 
-                # Obtener o crear el tipo de factura
-                try:
-                    tipo_factura = TipoFactura.objects.get(credito_fac=es_credito, contado_fac=not es_credito)
-                except TipoFactura.DoesNotExist:
-                    # Crear el tipo de factura si no existe
-                    tipo_factura = TipoFactura.objects.create(
-                        credito_fac=es_credito,
-                        contado_fac=not es_credito,
-                        plazo_credito=30 if es_credito else None
-                    )
-                
-                for prod in productos:
-                    try:
-                        producto = Producto.objects.get(pk=prod['id'])
-                        cantidad = Decimal(str(prod['cantidad']))
-                        
-                        # Verificar disponibilidad de stock
-                        if cantidad > producto.stock:
-                            raise ValueError(f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}")
-                        
-                        # Calcular subtotal
-                        subtotal = producto.precio * cantidad
-                        total_factura += subtotal
-                        
-                        # Crear detalle
-                        detalle = DetalleFactura(
-                            factura=factura,
-                            producto=producto,
-                            cantidad=cantidad,
-                            tipo_factura=tipo_factura,
-                            sub_total=subtotal
-                        )
-                        detalle.save()
-                        
-                        # DESCONTAR STOCK INMEDIATAMENTE
-                        producto.stock -= cantidad
-                        producto.save(update_fields=['stock'])
-                        
-                    except Producto.DoesNotExist:
-                        raise ValueError(f"El producto con ID {prod['id']} no existe.")
-                
-                # 6. Actualizar el total de la factura usando calcular_total_mejorado
-                factura.calcular_total_mejorado()
-                
-                # 7. Crear la venta y establecer estado según tipo
-                # Asegurar que los estados existan
-                """ try:
-                    if es_credito:
-                        estado = StatusVentas.objects.get(nombre="Pendiente")
-                    else:
-                        estado = StatusVentas.objects.get(nombre="Completada")
-                except StatusVentas.DoesNotExist:
-                    # Crear los estados si no existen
-                    if es_credito:
-                        estado = StatusVentas.objects.create(
-                            nombre="Pendiente",
-                            vent_espera=True,
-                            vent_cancelada=False
-                        )
-                    else:
-                        estado = StatusVentas.objects.create(
-                            nombre="Completada",
-                            vent_espera=False,
-                            vent_cancelada=False
-                        ) """
+                # 5. Crear estados necesarios
                 if es_credito:
                     estado, created = StatusVentas.objects.get_or_create(
                         nombre="Pendiente",
@@ -716,45 +643,147 @@ class VentaCreateView(LoginRequiredMixin, View):
                             'vent_espera': False,
                             'vent_cancelada': False
                         }
-    )
+                    )
                 
-                venta = Ventas.objects.create(
-                    empleado=factura.empleado,
-                    factura=factura,
-                    status=estado,
-                    credito=es_credito,
-                    monto_pagado=0 if es_credito else factura.total_fac
-                )
-                
-                # 8. Mensaje de éxito
-                tasa_actual = TasaCambio.get_tasa_actual()
-                if tasa_actual:
-                    total_bs = factura.total_fac * tasa_actual.tasa_usd_ves
-                    if es_credito:
+                if es_credito:
+                    # ==================== FLUJO CRÉDITO: NOTA DE ENTREGA ====================
+                    # Crear nota de entrega
+                    config = ConfiguracionSistema.get_config()
+                    nota = NotaEntrega.objects.create(
+                        cliente=cliente,
+                        empleado=request.user.empleado,
+                        numero_nota=config.get_siguiente_numero_nota_entrega()
+                    )
+                    
+                    # Procesar productos y crear detalles de nota
+                    for prod in productos:
+                        try:
+                            producto = Producto.objects.get(pk=prod['id'])
+                            cantidad = Decimal(str(prod['cantidad']))
+                            
+                            # Verificar stock
+                            if cantidad > producto.stock:
+                                raise ValueError(f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}")
+                            
+                            # Crear detalle de nota de entrega
+                            DetalleNotaEntrega.objects.create(
+                                nota_entrega=nota,
+                                producto=producto,
+                                cantidad=cantidad,
+                                precio_unitario=producto.precio
+                            )
+                            
+                            # Descontar stock
+                            producto.stock -= cantidad
+                            producto.save(update_fields=['stock'])
+                            
+                        except Producto.DoesNotExist:
+                            raise ValueError(f"El producto con ID {prod['id']} no existe.")
+                    
+                    # Calcular totales de la nota
+                    nota.calcular_totales()
+                    
+                    # Crear venta referenciando nota de entrega
+                    venta = Ventas.objects.create(
+                        empleado=request.user.empleado,
+                        nota_entrega=nota,  # NOTA DE ENTREGA, no factura
+                        status=estado,
+                        credito=True,
+                        monto_pagado=0
+                    )
+                    
+                    # Mensaje específico para crédito
+                    tasa_actual = TasaCambio.get_tasa_actual()
+                    if tasa_actual:
+                        total_bs = nota.total * tasa_actual.tasa_usd_ves
                         messages.success(
                             request, 
                             f'Venta a crédito #{venta.id} creada exitosamente. '
-                            f'Total: ${factura.total_fac:,.2f} ({total_bs:,.2f} Bs). '
-                            f'Estado: PENDIENTE DE PAGO'
+                            f'Nota de Entrega #{nota.numero_nota} generada. '
+                            f'Total: ${nota.total:,.2f} ({total_bs:,.2f} Bs). '
+                            f'Al completar el pago se generará la Factura Fiscal.'
                         )
                     else:
                         messages.success(
                             request, 
+                            f'Venta a crédito #{venta.id} creada exitosamente. '
+                            f'Nota de Entrega #{nota.numero_nota} generada. '
+                            f'Total: ${nota.total:,.2f}.'
+                        )
+                
+                else:
+                    # ==================== FLUJO CONTADO: FACTURA DIRECTA ====================
+                    # Crear factura inmediatamente
+                    factura = Factura(
+                        cliente=cliente,
+                        empleado=request.user.empleado,
+                        metodo_pag=metodo_pago
+                    )
+                    factura.save()
+                    
+                    # Obtener tipo de factura
+                    try:
+                        tipo_factura = TipoFactura.objects.get(credito_fac=False, contado_fac=True)
+                    except TipoFactura.DoesNotExist:
+                        tipo_factura = TipoFactura.objects.create(
+                            credito_fac=False,
+                            contado_fac=True
+                        )
+                    
+                    # Procesar productos y crear detalles de factura
+                    for prod in productos:
+                        try:
+                            producto = Producto.objects.get(pk=prod['id'])
+                            cantidad = Decimal(str(prod['cantidad']))
+                            
+                            # Verificar stock
+                            if cantidad > producto.stock:
+                                raise ValueError(f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}")
+                            
+                            # Crear detalle de factura
+                            DetalleFactura.objects.create(
+                                factura=factura,
+                                producto=producto,
+                                cantidad=cantidad,
+                                tipo_factura=tipo_factura,
+                                sub_total=producto.precio * cantidad
+                            )
+                            
+                            # Descontar stock
+                            producto.stock -= cantidad
+                            producto.save(update_fields=['stock'])
+                            
+                        except Producto.DoesNotExist:
+                            raise ValueError(f"El producto con ID {prod['id']} no existe.")
+                    
+                    # Calcular totales de la factura
+                    factura.calcular_total_mejorado()
+                    
+                    # Crear venta referenciando factura
+                    venta = Ventas.objects.create(
+                        empleado=request.user.empleado,
+                        factura=factura,  # FACTURA directa
+                        status=estado,
+                        credito=False,
+                        monto_pagado=factura.total_fac
+                    )
+                    
+                    # Mensaje específico para contado
+                    tasa_actual = TasaCambio.get_tasa_actual()
+                    if tasa_actual:
+                        total_bs = factura.total_fac * tasa_actual.tasa_usd_ves
+                        messages.success(
+                            request, 
                             f'Venta #{venta.id} completada exitosamente. '
+                            f'Factura Fiscal #{factura.numero_factura} generada. '
                             f'Total: ${factura.total_fac:,.2f} ({total_bs:,.2f} Bs). '
                             f'Pago recibido.'
                         )
-                else:
-                    if es_credito:
-                        messages.success(
-                            request, 
-                            f'Venta a crédito #{venta.id} creada exitosamente. '
-                            f'Total: ${factura.total_fac:,.2f}. Estado: PENDIENTE DE PAGO'
-                        )
                     else:
                         messages.success(
                             request, 
                             f'Venta #{venta.id} completada exitosamente. '
+                            f'Factura Fiscal #{factura.numero_factura} generada. '
                             f'Total: ${factura.total_fac:,.2f}. Pago recibido.'
                         )
                 
@@ -797,7 +826,7 @@ class VentasPendientesView(EmpleadoRolMixin, ListView):
 class RegistrarPagoView(EmpleadoRolMixin, UpdateView):
     model = Ventas
     template_name = 'black_invoices/ventas/registrar_pago.html'
-    fields = []  # No usamos campos del modelo directamente
+    fields = []
     roles_permitidos = ['Administrador', 'Supervisor', 'Vendedor']
     
     def get_context_data(self, **kwargs):
@@ -838,16 +867,46 @@ class RegistrarPagoView(EmpleadoRolMixin, UpdateView):
             
             metodo_display = dict(PagoVenta.METODOS_PAGO_CHOICES).get(metodo_pago, metodo_pago)
             
-            # Mensaje diferenciado según el estado
-            if self.object.completada:
+            # ==================== LÓGICA DE CONVERSIÓN A FACTURA ====================
+            if self.object.completada and self.object.credito:
+                # Venta completada y es a crédito
+                if self.object.nota_entrega and not self.object.nota_entrega.convertida_a_factura:
+                    try:
+                        # Convertir nota de entrega a factura fiscal
+                        factura = self.object.nota_entrega.convertir_a_factura()
+                        
+                        messages.success(
+                            request, 
+                            f'Pago de ${monto} registrado vía {metodo_display}. '
+                            f'Venta completada y Factura Fiscal #{factura.numero_factura} generada automáticamente.'
+                        )
+                    except Exception as e:
+                        # Si falla la conversión, registrar el pago pero alertar
+                        messages.warning(
+                            request, 
+                            f'Pago de ${monto} registrado vía {metodo_display}. '
+                            f'Venta completada, pero hubo un error al generar la factura: {str(e)}'
+                        )
+                else:
+                    # Ya tiene factura o ya fue convertida
+                    messages.success(
+                        request, 
+                        f'Pago de ${monto} registrado vía {metodo_display}. '
+                        f'Venta completada.'
+                    )
+            elif self.object.completada and not self.object.credito:
+                # Venta de contado completada (caso raro, pero por si acaso)
                 messages.success(
                     request, 
-                    f'Pago de ${monto} registrado vía {metodo_display}. La venta ha sido completada.'
+                    f'Pago de ${monto} registrado vía {metodo_display}. '
+                    f'Venta completada.'
                 )
             else:
+                # Pago parcial - venta aún pendiente
                 messages.success(
                     request, 
-                    f'Pago de ${monto} registrado vía {metodo_display}. Saldo pendiente: ${self.object.saldo_pendiente}'
+                    f'Pago de ${monto} registrado vía {metodo_display}. '
+                    f'Saldo pendiente: ${self.object.saldo_pendiente}'
                 )
             
             return redirect('black_invoices:ventas_pendientes')
@@ -869,12 +928,18 @@ class VentaDetailView(LoginRequiredMixin, DetailView):
         venta = self.object
         context['titulo'] = f'Detalle de venta #{venta.id}'
 
-        context['detalles'] = venta.factura.detallefactura_set.all()
+        # Obtener detalles según el tipo de documento - ACTUALIZADO
+        if venta.factura:
+            context['detalles'] = venta.factura.detallefactura_set.all()
+            context['totales_formateados'] = venta.factura.get_totales_formateados()
+        elif venta.nota_entrega:
+            context['detalles'] = venta.nota_entrega.detalles_nota.all()
+            context['totales_formateados'] = venta.nota_entrega.get_totales_formateados()
+        else:
+            context['detalles'] = []
+            context['totales_formateados'] = {}
         
-        # Información de totales formateados
-        context['totales_formateados'] = venta.factura.get_totales_formateados()
-        
-        # Estado de la venta con nuevos campos
+        # Estado de la venta con nuevos campos - USANDO PROPIEDADES ACTUALIZADAS
         context['saldo_pendiente'] = venta.saldo_pendiente if venta.credito else 0
         context['completada'] = venta.completada
         
@@ -882,12 +947,6 @@ class VentaDetailView(LoginRequiredMixin, DetailView):
         if venta.credito:
             context['pagos'] = venta.pagos.all().order_by('-fecha')
             context['resumen_pagos'] = venta.resumen_pagos()
-        
-        # Información de comisión
-        try:
-            context['comision'] = venta.comision
-        except:
-            context['comision'] = None
         
         return context
 
@@ -997,17 +1056,17 @@ class FacturaPDFView(LoginRequiredMixin, View):
         
         # Nombre de la empresa (ajustado a la izquierda)
         p.setFont("Helvetica-Bold", 12)
-        p.drawString(180, height - 50, "INDUSTRIA & HERRAMIENTA EL NEGRITO, C.A.")
+        p.drawString(180, height - 50, "CORPORACION AGRICOLA DOÑA CLARA, C.A.")
         
         # RIF (ajustado para no sobreponerse)
         p.setFont("Helvetica-Bold", 11)
-        p.drawString(180, height - 65, "RIF: J-406050717")
+        p.drawString(180, height - 65, "RIF: J-40723051-4")
         
         # Dirección y teléfonos
         p.setFont("Helvetica", 10)
-        p.drawString(180, height - 80, "CR 10 ENTRE CALLES 4 Y 5 EDIF DOÑA EDITH PISO 1 OF 2")
-        p.drawString(180, height - 95, "BARRIO MATURIN GUANARE PORTUGUESA")
-        p.drawString(180, height - 110, "Teléfonos: 0257-5143082 / 0257-5143082")
+        p.drawString(180, height - 80, "Vda. 18 Casa Nro. 48")
+        p.drawString(180, height - 95, "Urb. Francisco de Miranda")
+        p.drawString(180, height - 110, "Teléfonos: 0424-5439427 / 0424-5874882 / 0257-2532558 ")
 
         # --- Datos generales ---
         p.setFont("Helvetica-Bold", 13)
@@ -1111,7 +1170,7 @@ class FacturaPDFView(LoginRequiredMixin, View):
         
         # Footer
         p.setFont("Helvetica", 8)
-        p.drawString(40, 30, "The Black System - Todos los derechos reservados")
+        p.drawString(40, 30, "Corporacion Agricola Doña Clara- Todos los derechos reservados")
 
         p.showPage()
         p.save()
@@ -1120,7 +1179,105 @@ class FacturaPDFView(LoginRequiredMixin, View):
         response['Content-Disposition'] = f'attachment; filename="Recibo_Venta_{factura.id}.pdf"'
         return response
 
+class NotaEntregaPDFView(LoginRequiredMixin, View):
+    def get(self, request, pk):
+        try:
+            nota = NotaEntrega.objects.get(pk=pk)
+        except NotaEntrega.DoesNotExist:
+            return HttpResponse("Nota de Entrega no encontrada", status=404)
+
+        buffer = io.BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
+
+        # --- Membrete y Logo ---
+        logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
+        if os.path.exists(logo_path):
+            p.drawImage(logo_path, -40, height - 180, width=320, height=150, preserveAspectRatio=True, mask='auto')
         
+        # Información de empresa
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(180, height - 50, "CORPORACIÓN AGRÍCOLA DOÑA CLARA C.A.")
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(180, height - 65, "RIF: J-40723051-4")
+        p.setFont("Helvetica", 10)
+        p.drawString(180, height - 80, "Urb. Francisco de Miranda")
+        p.drawString(180, height - 95, "Teléfonos: 04245439427")
+
+        # --- Datos generales ---
+        p.setFont("Helvetica-Bold", 13)
+        p.drawString(50, height - 130, "NOTA DE ENTREGA")
+        p.setFont("Helvetica", 10)
+        fecha_impresion = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+        p.drawString(400, height - 130, f"Fecha impresión: {fecha_impresion}")
+        p.drawString(400, height - 145, f"Nº Nota: {nota.numero_nota:06d}")
+        p.drawString(400, height - 160, f"Fecha: {nota.fecha_nota.strftime('%d-%m-%Y %H:%M')}")
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(400, height - 175, f"VENDEDOR: {nota.empleado.nombre} {nota.empleado.apellido}")
+
+        # --- Datos del cliente ---
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(50, height - 160, f"CLIENTE:")
+        p.setFont("Helvetica", 10)
+        p.drawString(50, height - 175, f"TLF: {nota.cliente.telefono}")
+        p.drawString(50, height - 190, f"NOMBRE: {nota.cliente.nombre} {nota.cliente.apellido}")
+        p.drawString(50, height - 205, f"DIRECCIÓN: {nota.cliente.direccion}")
+
+        # --- Tabla de productos ---
+        detalles = nota.detalles_nota.all()
+        data = [["#", "Código", "Producto", "Cant.", "Unidad", "Precio", "Total"]]
+        
+        for idx, detalle in enumerate(detalles, 1):
+            codigo = detalle.producto.sku or str(detalle.producto.id)
+            unidad = detalle.producto.unidad_medida.abreviatura if detalle.producto.unidad_medida else "UN"
+            data.append([
+                str(idx),
+                codigo,
+                detalle.producto.nombre,
+                str(detalle.cantidad),
+                unidad,
+                f"${detalle.precio_unitario:,.2f}",
+                f"${detalle.subtotal_linea:,.2f}"
+            ])
+        
+        # Fila de totales
+        data.append(["", "", "", "", "", "TOTAL", f"${nota.total:,.2f}"])
+        
+        # Crear tabla
+        table = Table(data, colWidths=[25, 60, 180, 40, 40, 60, 60])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('GRID', (0, 0), (-1, -2), 0.5, colors.black),
+            ('LINEABOVE', (5, -1), (6, -1), 0.5, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ALIGN', (3, 1), (6, -1), 'RIGHT'),
+            ('FONTNAME', (5, -1), (6, -1), 'Helvetica-Bold'),
+        ]))
+        
+        table.wrapOn(p, width, height)
+        table.drawOn(p, 40, height - 350)
+
+        # --- Nota importante ---
+        p.setFont("Helvetica", 8)
+        nota_texto = "NOTA IMPORTANTE: Este documento es una NOTA DE ENTREGA. La Factura Fiscal se generará al completar el pago."
+        p.drawString(40, 100, nota_texto)
+
+        # Footer
+        p.setFont("Helvetica", 8)
+        p.drawString(40, 30, "The Black System - Sistema de Ventas")
+
+        p.showPage()
+        p.save()
+        buffer.seek(0)
+        
+        response = HttpResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="Nota_Entrega_{nota.numero_nota}.pdf"'
+        return response        
     
 from django.http import HttpResponse, JsonResponse
 from django.core.management import call_command
@@ -1470,19 +1627,38 @@ class TasaCambioUpdateView(EmpleadoRolMixin, UpdateView):
         return super().form_valid(form)
 
 
+# En views.py - Agregar esta nueva vista
+from django.http import JsonResponse
+from django.views import View
+from django.db.models import Q
+
 class ProductoSearchAPIView(View):
     def get(self, request):
-        query = request.GET.get('q', '')
-        productos = Producto.objects.filter(
-            Q(nombre__icontains=query) | Q(sku__icontains=query)
-        ).filter(stock__gt=0)[:10]
+        query = request.GET.get('q', '').strip()
         
-        data = [{
-            'id': p.id,
-            'text': f"{p.sku} - {p.nombre}",
-            'precio': float(p.precio),
-            'stock': float(p.stock),
-            'unidad': p.unidad_medida.abreviatura if p.unidad_medida else 'UN'
-        } for p in productos]
+        if len(query) < 2:  # Mínimo 2 caracteres
+            return JsonResponse({'results': []})
+        
+        # Buscar productos activos con stock
+        productos = Producto.objects.filter(
+            Q(nombre__icontains=query) | Q(sku__icontains=query),
+            activo=True,
+            stock__gt=0
+        ).select_related('unidad_medida')[:10]  # Máximo 10 resultados
+        
+        # Formatear datos para Select2
+        data = []
+        for p in productos:
+            data.append({
+                'id': p.id,
+                'text': f"{p.sku} - {p.nombre}",
+                'nombre': p.nombre,
+                'sku': p.sku,
+                'precio': float(p.precio),
+                'stock': float(p.stock),
+                'unidad': p.unidad_medida.abreviatura if p.unidad_medida else 'UN',
+                'precio_formateado': f"${p.precio:,.2f}",
+                'stock_formateado': f"{p.stock:,.1f}"
+            })
         
         return JsonResponse({'results': data})

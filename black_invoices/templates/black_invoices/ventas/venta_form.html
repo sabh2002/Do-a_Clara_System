@@ -280,7 +280,7 @@ function updateSubtotal(row) {
     // Extraer precio USD del HTML
     const priceStrongElement = priceCell.querySelector('strong');
     const priceText = priceStrongElement ? priceStrongElement.textContent : '$0.00';
-    const price = parseFloat(priceText.replace('$', '').replace(',', '.')) || 0;
+    const price = parseFloat(priceText.replace('$', '')) || 0;
     const quantity = parseFloat(quantityInput.value) || 0;
     
     console.log('Calculando subtotal:', { price, quantity });

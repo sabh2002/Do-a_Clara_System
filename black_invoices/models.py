@@ -395,7 +395,9 @@ class Ventas(models.Model):
     factura = models.OneToOneField(
         'Factura',
         on_delete=models.PROTECT,
-        verbose_name="Factura"
+        verbose_name="Factura",
+        null=True,  # NUEVO
+        blank=True
     )
     status = models.ForeignKey(
         'StatusVentas',
@@ -408,7 +410,13 @@ class Ventas(models.Model):
     )
     credito = models.BooleanField(default=False, verbose_name="Venta a Crédito")
     monto_pagado = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Monto Pagado")
-    
+    nota_entrega = models.OneToOneField(
+        'NotaEntrega',
+        on_delete=models.PROTECT,
+        verbose_name="Nota de Entrega",
+        null=True,
+        blank=True
+    )
         
     class Meta:
         verbose_name = "Venta"
@@ -448,12 +456,10 @@ class Ventas(models.Model):
             self.save()
 
     def registrar_pago(self, monto, metodo_pago='efectivo', referencia=None):
-        """Registra un pago parcial con validaciones de autorización"""
+        """Registra un pago parcial con validaciones - ACTUALIZADO"""
         from decimal import Decimal
         from django.utils import timezone
         from django.db import transaction
-        
-        # VALIDACIÓN: Solo ventas autorizadas pueden recibir pagos
         
         # VALIDACIÓN: Solo ventas a crédito pueden recibir pagos parciales
         if not self.credito:
@@ -471,7 +477,7 @@ class Ventas(models.Model):
         if not isinstance(monto, Decimal):
             monto = Decimal(str(monto))
         
-        # VALIDACIÓN: No exceder el saldo pendiente
+        # VALIDACIÓN: No exceder el saldo pendiente - USANDO TOTAL_VENTA
         if monto > self.saldo_pendiente:
             raise ValueError(f"El monto (${monto}) excede el saldo pendiente (${self.saldo_pendiente})")
         
@@ -486,7 +492,13 @@ class Ventas(models.Model):
             
             # CAMBIAR ESTADO si se completó el pago
             if self.completada and self.credito:
-                estado_completado = StatusVentas.objects.get(nombre="Completada")
+                estado_completado, created = StatusVentas.objects.get_or_create(
+                    nombre="Completada",
+                    defaults={
+                        'vent_espera': False,
+                        'vent_cancelada': False
+                    }
+                )
                 self.status = estado_completado
                 
             self.save(update_fields=['monto_pagado', 'status'])
@@ -556,35 +568,77 @@ class Ventas(models.Model):
         return resumen
 
     def cancelar_venta(self):
-        """Cancela la venta y restaura el stock"""
+        """Cancela la venta y restaura el stock - ACTUALIZADO"""
         from django.db import transaction
         
         if self.status.vent_cancelada:
             raise ValueError("Esta venta ya está cancelada")
         
         with transaction.atomic():
-            # Restaurar stock
-            detalles = self.factura.detallefactura_set.all()
-            for detalle in detalles:
-                detalle.producto.stock += detalle.cantidad
-                detalle.producto.save(update_fields=['stock'])
+            # Restaurar stock según el tipo de documento
+            if self.factura:
+                detalles = self.factura.detallefactura_set.all()
+                for detalle in detalles:
+                    detalle.producto.stock += detalle.cantidad
+                    detalle.producto.save(update_fields=['stock'])
+            elif self.nota_entrega:
+                detalles = self.nota_entrega.detalles_nota.all()
+                for detalle in detalles:
+                    detalle.producto.stock += detalle.cantidad
+                    detalle.producto.save(update_fields=['stock'])
             
             # Marcar como cancelada
-            self.status = StatusVentas.objects.get(vent_cancelada=True)
+            estado_cancelado, created = StatusVentas.objects.get_or_create(
+                vent_cancelada=True,
+                defaults={
+                    'nombre': 'Cancelada',
+                    'vent_espera': False
+                }
+            )
+            self.status = estado_cancelado
             self.save()
     @property
     def saldo_pendiente(self):
         """Calcula el saldo pendiente de pago para ventas a crédito"""
         if not self.credito:
             return Decimal('0.00')
-        return max(Decimal('0.00'), self.factura.total_fac - self.monto_pagado)
+        return max(Decimal('0.00'), self.total_venta - self.monto_pagado)
     
     @property
     def completada(self):
         """Verifica si la venta está completamente pagada"""
         if not self.credito:
             return True  # Las ventas de contado están completadas por definición
-        return self.monto_pagado >= self.factura.total_fac
+        return self.monto_pagado >= self.total_venta
+    @property
+    def documento_fiscal(self):
+        """Retorna el documento fiscal asociado (Factura o Nota)"""
+        return self.factura or self.nota_entrega
+    
+    @property
+    def tipo_documento(self):
+        """Retorna el tipo de documento"""
+        if self.factura:
+            return "Factura"
+        elif self.nota_entrega:
+            return "Nota de Entrega"
+        return "Sin Documento"
+    @property
+    def numero_documento(self):
+        """Retorna el número del documento"""
+        if self.factura:
+            return self.factura.numero_factura
+        elif self.nota_entrega:
+            return self.nota_entrega.numero_nota
+        return "N/A"
+    @property
+    def total_venta(self):
+        """Total de la venta desde el documento fiscal"""
+        if self.factura:
+            return self.factura.total_fac
+        elif self.nota_entrega:
+            return self.nota_entrega.total
+        return Decimal('0.00')
     
 
 class PagoVenta(models.Model):
@@ -1274,7 +1328,112 @@ class NotaEntrega(models.Model):
         
         self.save(update_fields=['subtotal', 'iva', 'total'])
         return {'subtotal': self.subtotal, 'iva': self.iva, 'total': self.total}
-
+    def convertir_a_factura(self):
+        from django.db import transaction
+        """Convierte la nota de entrega a factura fiscal"""
+        if self.convertida_a_factura:
+            raise ValueError("Esta nota ya fue convertida a factura")
+        
+        with transaction.atomic():
+            # Crear factura
+            factura = Factura.objects.create(
+                cliente=self.cliente,
+                empleado=self.empleado,
+                metodo_pag='credito',
+                subtotal=self.subtotal,
+                iva=self.iva,
+                total_fac=self.total
+            )
+            
+            # Copiar detalles
+            for detalle_nota in self.detalles_nota.all():
+                DetalleFactura.objects.create(
+                    factura=factura,
+                    producto=detalle_nota.producto,
+                    cantidad=detalle_nota.cantidad,
+                    tipo_factura=TipoFactura.objects.get(credito_fac=True),
+                    sub_total=detalle_nota.subtotal_linea
+                )
+            
+            # Marcar como convertida
+            self.convertida_a_factura = True
+            self.factura_generada = factura
+            self.save()
+            
+            # Actualizar venta
+            venta = self.ventas  # relación inversa
+            venta.factura = factura
+            venta.nota_entrega = None
+            venta.save()
+        
+            return factura
+    # En models.py - Agregar al modelo NotaEntrega
+    def get_totales_formateados(self):
+        """Retorna totales en USD y VES formateados (similar a Factura)"""
+        tasa_actual = TasaCambio.get_tasa_actual()
+        
+        if tasa_actual:
+            subtotal_ves = self.subtotal * tasa_actual.tasa_usd_ves
+            iva_ves = self.iva * tasa_actual.tasa_usd_ves
+            total_ves = self.total * tasa_actual.tasa_usd_ves
+        else:
+            subtotal_ves = iva_ves = total_ves = 0
+        
+        return {
+            'subtotal_usd': f"${self.subtotal:,.2f}",
+            'subtotal_ves': f"{subtotal_ves:,.2f} Bs",
+            'iva_usd': f"${self.iva:,.2f}",
+            'iva_ves': f"{iva_ves:,.2f} Bs",
+            'total_usd': f"${self.total:,.2f}",
+            'total_ves': f"{total_ves:,.2f} Bs",
+            'tasa_cambio': tasa_actual.tasa_usd_ves if tasa_actual else 1
+    }
+    def convertir_a_factura(self):
+        """Convierte la nota de entrega a factura fiscal"""
+        from django.db import transaction
+        
+        if self.convertida_a_factura:
+            raise ValueError("Esta nota ya fue convertida a factura")
+        
+        with transaction.atomic():
+            # Crear factura
+            factura = Factura.objects.create(
+                cliente=self.cliente,
+                empleado=self.empleado,
+                metodo_pag='credito',
+                subtotal=self.subtotal,
+                iva=self.iva,
+                total_fac=self.total
+            )
+            
+            # Copiar detalles
+            tipo_factura, created = TipoFactura.objects.get_or_create(
+                credito_fac=True,
+                contado_fac=False,
+                defaults={'plazo_credito': 30}
+            )
+            
+            for detalle_nota in self.detalles_nota.all():
+                DetalleFactura.objects.create(
+                    factura=factura,
+                    producto=detalle_nota.producto,
+                    cantidad=detalle_nota.cantidad,
+                    tipo_factura=tipo_factura,
+                    sub_total=detalle_nota.subtotal_linea
+                )
+            
+            # Marcar como convertida
+            self.convertida_a_factura = True
+            self.factura_generada = factura
+            self.save(update_fields=['convertida_a_factura', 'factura_generada'])
+            
+            # Actualizar venta
+            venta = self.ventas  # relación inversa OneToOne
+            venta.factura = factura
+            venta.nota_entrega = None
+            venta.save(update_fields=['factura', 'nota_entrega'])
+            
+            return factura
 class DetalleNotaEntrega(models.Model):
     """
     Detalles de una nota de entrega
