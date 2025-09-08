@@ -1,0 +1,349 @@
+DOCUMENTO DE ESPECIFICACIONES Y ESTADO DEL PROYECTO
+Sistema de Ventas - Corporación Agrícola Doña Clara
+INFORMACIÓN GENERAL
+Proyecto: Sistema de Ventas para Mangueras y Conexiones Hidráulicas
+Cliente: Corporación Agrícola Doña Clara C.A
+RIF: J-40723051-4
+Stack Técnico: Django 5.2, Python 3.13, SQLite, ReportLab
+Estado Actual: Desarrollo Activo - Versión 0.8
+
+ESTADO ACTUAL DEL PROYECTO
+FUNCIONALIDADES COMPLETAMENTE IMPLEMENTADAS
+1. Sistema de Ventas Dual
+
+Ventas de contado generan Factura Fiscal inmediatamente
+Ventas a crédito generan Nota de Entrega inicialmente
+Conversión automática de Nota de Entrega a Factura al completar pago
+Manejo correcto de stock en ambos flujos
+
+2. Gestión de Inventario
+
+Modelo Producto con SKU, precio, stock y unidades de medida
+Descuento automático de stock al crear ventas
+Restauración de stock al cancelar ventas
+Validación de stock disponible antes de venta
+
+3. Sistema de Pagos
+
+Registro de pagos parciales para ventas a crédito
+Múltiples métodos de pago (efectivo, tarjeta, transferencia, pago móvil)
+Cálculo automático de saldos pendientes
+Historial completo de pagos por venta
+
+4. Gestión de Documentos Fiscales
+
+Generación de PDF para Facturas
+Generación de PDF para Notas de Entrega
+Numeración secuencial automática
+Información fiscal completa
+
+5. Modelos de Datos Consolidados
+
+Cliente con validación de cédula venezolana
+Empleado con niveles de acceso
+Producto con unidades de medida y decimales
+Tasa de cambio con histórico
+
+
+PROBLEMAS CRÍTICOS PENDIENTES
+PRIORIDAD ALTA
+1. Sistema de Tasa de Cambio Incompleto
+Estado: Modelo implementado, funcionalidad manual/automática pendiente
+Problema específico:
+
+Existe modelo TasaCambio con get_tasa_actual()
+Falta vista para actualización manual por administradores
+Falta integración con API externa para actualización automática
+Falta comando programado para actualización diaria
+
+Impacto: Los precios en bolívares pueden ser incorrectos
+Implementación requerida:
+python# Crear comando management/commands/actualizar_tasa_cambio.py
+# Crear TasaCambioUpdateView con formulario
+# Integrar con API del BCV o servicio similar
+# Configurar tarea programada (Django-cron o Celery)
+2. Vista de Ventas Pendientes Rota
+Estado: No funcional después de cambios en modelo Ventas
+Problema específico:
+
+Queryset en VentasPendientesView busca ventas con factura.total_fac
+Ventas a crédito ahora tienen nota_entrega, no factura
+Filter exclude(monto_pagado__gte=F('factura__total_fac')) falla
+
+Código problemático en views.py:
+pythondef get_queryset(self):
+    return Ventas.objects.filter(
+        credito=True,
+        status__vent_cancelada=False
+    ).exclude(
+        monto_pagado__gte=F('factura__total_fac')  # ESTO FALLA
+    ).order_by('-id')
+Corrección requerida:
+pythondef get_queryset(self):
+    return Ventas.objects.filter(
+        credito=True,
+        status__vent_cancelada=False
+    ).exclude(
+        monto_pagado__gte=F('nota_entrega__total')  # USAR NOTA_ENTREGA
+    ).order_by('-id')
+3. Templates DataTables Inconsistentes
+Estado: Solo ventas_list.html funciona correctamente
+Problema específico:
+
+clientes_list.html, productos_list.html, empleados_list.html tienen DataTables mal configurado
+Botones de exportación (PDF, Excel, Print) quedan en loading infinito
+Configuración de columns no coincide con estructura HTML
+Falta configuración correcta de exportOptions
+
+Templates afectados:
+
+black_invoices/clientes/clientes_list.html
+black_invoices/productos/productos_list.html
+black_invoices/empleados/empleados_list.html
+black_invoices/facturas/facturas_list.html
+
+Corrección requerida: Replicar configuración exitosa de ventas_list.html
+PRIORIDAD MEDIA
+4. Información de Empresa Hardcodeada
+Estado: Datos incorrectos en PDFs y templates
+Problema específico:
+
+PDFs muestran "INDUSTRIA & HERRAMIENTA EL NEGRITO, C.A." en lugar de datos correctos
+Logo incorrecto (the_black.jpeg vs logo correcto)
+RIF, dirección y teléfonos hardcodeados en vistas PDF
+ConfiguracionSistema no se usa consistentemente
+
+Archivos afectados:
+
+views.py (FacturaPDFView, NotaEntregaPDFView)
+static/img/ (logo incorrecto)
+Templates con datos empresa
+
+5. Búsqueda de Productos Inadecuada
+Estado: Select normal con lista completa - UX deficiente
+Problema específico:
+
+Lista desplegable con todos los productos (puede ser muy larga)
+No hay búsqueda por SKU o nombre
+Select2 fue removido por problemas de implementación
+Usuarios deben scrollear manualmente por lista completa
+
+Implementación requerida:
+
+API endpoint /api/productos/buscar/
+Select2 correctamente implementado
+Búsqueda AJAX por SKU y nombre
+Cache de resultados
+
+PRIORIDAD BAJA
+6. Exportación/Importación de Base de Datos
+Estado: Funcionalidad básica implementada, necesita mejoras
+Problema específico:
+
+export_database_view() usa dumpdata básico
+import_database_view() no valida integridad de datos
+No hay backup automático antes de importar
+Falta manejo de errores robusto
+No hay validación de formato de archivo
+
+7. Campos Fantasma en Modelos
+Estado: Referencias a campos eliminados causan errores
+Problema específico:
+
+comentarios_autorizacion mencionado en código pero no existe
+Referencias a sistema de comisiones eliminado
+Campos de autorización de ventas ya removidos
+
+
+IMPLEMENTACIONES REQUERIDAS DETALLADAS
+1. SISTEMA DE TASA DE CAMBIO COMPLETO
+Comando de Actualización Automática:
+python# management/commands/actualizar_tasa_cambio.py
+import requests
+from django.core.management.base import BaseCommand
+from black_invoices.models import TasaCambio
+
+class Command(BaseCommand):
+    def handle(self, *args, **options):
+        try:
+            # Integrar con API del BCV o similar
+            response = requests.get('https://api.bcv.org.ve/tasa-cambio')
+            tasa = response.json()['usd_ves']
+
+            TasaCambio.objects.create(
+                fecha=timezone.now().date(),
+                tasa_usd_ves=tasa,
+                fuente='BCV_API',
+                activa=True
+            )
+        except Exception as e:
+            self.stdout.write(f'Error: {e}')
+Vista de Actualización Manual:
+pythonclass TasaCambioManualView(EmpleadoRolMixin, CreateView):
+    model = TasaCambio
+    fields = ['tasa_usd_ves', 'fuente']
+    roles_permitidos = ['Administrador']
+
+    def form_valid(self, form):
+        form.instance.fecha = timezone.now().date()
+        form.instance.activa = True
+        return super().form_valid(form)
+2. CORRECCIÓN DE VENTAS PENDIENTES
+views.py - VentasPendientesView:
+pythondef get_queryset(self):
+    from django.db.models import Case, When, F
+
+    return Ventas.objects.filter(
+        credito=True,
+        status__vent_cancelada=False
+    ).annotate(
+        total_documento=Case(
+            When(factura__isnull=False, then=F('factura__total_fac')),
+            When(nota_entrega__isnull=False, then=F('nota_entrega__total')),
+            default=0
+        )
+    ).exclude(
+        monto_pagado__gte=F('total_documento')
+    ).order_by('-id')
+3. ESTANDARIZACIÓN DE DATATABLES
+Template base para todas las listas:
+javascript// Configuración estándar DataTables
+var table = $('#tabla-datos').DataTable({
+    "responsive": true,
+    "lengthChange": true,
+    "autoWidth": false,
+    "order": [[0, 'desc']],
+    "dom": "<'row'<'col-sm-12 col-md-6'B><'col-sm-12 col-md-6'f>>" +
+           "<'row'<'col-sm-12'tr>>" +
+           "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+    "buttons": [
+        {
+            extend: 'pdf',
+            exportOptions: {
+                columns: ':visible:not(.no-export)'
+            }
+        }
+        // ... resto de configuración
+    ]
+});
+4. BÚSQUEDA INTUITIVA DE PRODUCTOS
+API Endpoint:
+pythonclass ProductoSearchAPIView(View):
+    def get(self, request):
+        query = request.GET.get('q', '').strip()
+        if len(query) < 2:
+            return JsonResponse({'results': []})
+
+        productos = Producto.objects.filter(
+            Q(nombre__icontains=query) | Q(sku__icontains=query),
+            activo=True,
+            stock__gt=0
+        ).select_related('unidad_medida')[:10]
+
+        data = [{
+            'id': p.id,
+            'text': f"{p.sku} - {p.nombre}",
+            'precio': float(p.precio),
+            'stock': float(p.stock),
+            'unidad': p.unidad_medida.abreviatura if p.unidad_medida else 'UN'
+        } for p in productos]
+
+        return JsonResponse({'results': data})
+Select2 Implementación:
+javascript$('.producto-select').select2({
+    ajax: {
+        url: '/api/productos/buscar/',
+        dataType: 'json',
+        delay: 250,
+        data: function (params) {
+            return { q: params.term };
+        },
+        processResults: function (data) {
+            return { results: data.results };
+        }
+    },
+    minimumInputLength: 2,
+    placeholder: 'Buscar producto...'
+});
+
+PLAN DE IMPLEMENTACIÓN RECOMENDADO
+FASE 1: CORRECCIONES CRÍTICAS (1-2 días)
+
+Corregir VentasPendientesView
+Estandarizar DataTables en todos los templates
+Verificar y corregir información de empresa en PDFs
+
+FASE 2: FUNCIONALIDADES PRINCIPALES (3-4 días)
+
+Implementar sistema completo de tasa de cambio
+Desarrollar búsqueda intuitiva de productos
+Limpiar campos fantasma y referencias obsoletas
+
+FASE 3: MEJORAS Y OPTIMIZACIONES (2-3 días)
+
+Robustecer exportación/importación de BD
+Optimizar rendimiento de consultas
+Pruebas integrales del sistema
+
+FASE 4: DOCUMENTACIÓN Y CAPACITACIÓN (1 día)
+
+Manual de usuario
+Capacitación del personal
+Documentación técnica
+
+
+REQUERIMIENTOS TÉCNICOS ADICIONALES
+DEPENDENCIAS NUEVAS REQUERIDAS
+# requirements.txt additions
+requests>=2.28.0  # Para API de tasa de cambio
+django-cron>=0.5.1  # Para tareas programadas
+CONFIGURACIONES DE SETTINGS.PY
+python# Configuración para tareas programadas
+CRONJOBS = [
+    ('0 9 * * *', 'black_invoices.management.commands.actualizar_tasa_cambio')
+]
+
+# Configuración para API externa
+BCV_API_URL = 'https://api.bcv.org.ve/'
+BCV_API_TIMEOUT = 30
+MIGRACIONES PENDIENTES
+bash# Verificar y aplicar migraciones
+python manage.py makemigrations
+python manage.py migrate
+
+# Comandos de verificación
+python manage.py check_system
+python manage.py verificar_flujo_documentos
+
+MÉTRICAS DE COMPLETITUD ACTUAL
+Funcionalidades Implementadas: 75%
+Flujo de Ventas: 90%
+Reportes y PDFs: 70%
+Gestión de Inventario: 85%
+Sistema de Pagos: 90%
+Interfaz de Usuario: 60%
+Integración Externa: 20%
+ESTIMACIÓN TOTAL PARA COMPLETAR: 8-10 días de desarrollo
+
+RIESGOS Y CONSIDERACIONES
+RIESGOS TÉCNICOS
+
+Dependencia de API externa para tasa de cambio
+Migración de datos existentes al implementar cambios
+Compatibilidad con versiones actuales de dependencias
+
+RIESGOS DE NEGOCIO
+
+Interrupciones durante implementación de cambios críticos
+Necesidad de capacitación del personal en nuevas funcionalidades
+Migración de datos históricos
+
+RECOMENDACIONES
+
+Implementar en ambiente de pruebas primero
+Backup completo antes de cada cambio mayor
+Implementación gradual por fases
+Pruebas exhaustivas con datos reales antes de producción
+
+
+Este documento debe actualizarse conforme se completen las implementaciones pendientes. La priorización puede ajustarse según necesidades específicas del negocio.

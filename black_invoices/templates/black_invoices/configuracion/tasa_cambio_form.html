@@ -49,17 +49,17 @@
                 <div class="col-md-12">
                     <div class="form-group">
                         <div class="custom-control custom-checkbox">
-                            {{ form.activa }}
-                            <label class="custom-control-label" for="{{ form.activa.id_for_label }}">
-                                {{ form.activa.label }}
+                            {{ form.activo }}
+                            <label class="custom-control-label" for="{{ form.activo.id_for_label }}">
+                                {{ form.activo.label }}
                             </label>
                         </div>
                         <small class="form-text text-muted">
                             Si activas esta tasa, se desactivarán automáticamente las demás.
                         </small>
-                        {% if form.activa.errors %}
+                        {% if form.activo.errors %}
                             <div class="text-danger">
-                                {{ form.activa.errors }}
+                                {{ form.activo.errors }}
                             </div>
                         {% endif %}
                     </div>
@@ -89,7 +89,7 @@ $(document).ready(function() {
     // Agregar clases CSS a los campos
     $('#id_fecha').addClass('form-control');
     $('#id_tasa_usd_ves').addClass('form-control');
-    $('#id_activa').addClass('custom-control-input');
+    $('#id_activo').addClass('custom-control-input');
 });
 </script>
 {% endblock %}

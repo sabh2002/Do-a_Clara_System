@@ -18,6 +18,9 @@
                 {% endif %}
             </div>
             <div class="col-md-3 text-right">
+                <a href="{% url 'black_invoices:tasa_cambio_manual' %}" class="btn btn-warning btn-sm mr-1" title="Actualización rápida">
+                    <i class="fas fa-bolt"></i> Rápida
+                </a>
                 <a href="{% url 'black_invoices:tasa_cambio_create' %}" class="btn btn-primary">
                     <i class="fas fa-plus"></i> Nueva Tasa
                 </a>
@@ -44,7 +47,7 @@
                         <small class="text-muted d-block">por cada 1 USD</small>
                     </td>
                     <td>
-                        {% if tasa.activa %}
+                        {% if tasa.activo %}
                         <span class="badge badge-success">Activa</span>
                         {% else %}
                         <span class="badge badge-secondary">Inactiva</span>

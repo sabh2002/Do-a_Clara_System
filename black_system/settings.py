@@ -125,3 +125,34 @@ STATIC_URL = 'black_invoices/static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 #AUTH_USER_MODEL = 'black_invoices.Usuario'
+
+# Configuración para tasa de cambio automática
+BCV_API_URL = 'https://api.exchangerate-api.com/v4/latest/USD'
+BCV_API_TIMEOUT = 30
+
+# Configuración de archivos media
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Logging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'django.log',
+        },
+    },
+    'loggers': {
+        'black_invoices.management.commands': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}
+
+# Nota: Para tareas programadas, usar crontab del sistema:
+# 0 9 * * * cd /ruta/al/proyecto && source env/bin/activate && python manage.py actualizar_tasa_cambio --force

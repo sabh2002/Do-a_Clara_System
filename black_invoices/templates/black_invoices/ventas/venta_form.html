@@ -73,18 +73,18 @@
                                 <tbody>
                                     <tr class="fila-producto">
                                         <td>
-                                            <select name="form-0-producto" class="form-control producto-select" required>
-                                                <option value="">------</option>
-                                                {% for p in productos %}
-                                                    <option value="{{ p.id }}" 
-                                                            data-precio="{{ p.precio }}" 
-                                                            data-precio-bs="{{ p.precio|precio_bolivares }}" 
-                                                            data-stock="{{ p.stock }}"
-                                                            data-unidad="{{ p.unidad_medida }}">
-                                                        {{ p.nombre }}
-                                                    </option>
-                                                {% endfor %}
-                                            </select>
+                                            <div class="producto-search-container" style="position: relative;">
+                                                <input type="text" 
+                                                       class="form-control producto-search-input" 
+                                                       placeholder="Buscar producto por nombre o SKU..."
+                                                       autocomplete="off">
+                                                <input type="hidden" 
+                                                       name="form-0-producto" 
+                                                       class="producto-id-hidden" 
+                                                       required>
+                                                <div class="producto-search-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; background: white; border: 1px solid #ddd; border-top: none; max-height: 300px; overflow-y: auto;">
+                                                </div>
+                                            </div>
                                         </td>
                                         <td class="precio">
                                             <strong>$0.00</strong>
@@ -152,6 +152,56 @@
         </div>
     </form>
 </div>
+
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdnjs.cloudflare.com/ajax/libs/select2-bootstrap-theme/0.1.0-beta.10/select2-bootstrap.min.css" rel="stylesheet" />
+
+<!-- Estilos para búsqueda de productos -->
+<style>
+.producto-search-container {
+    position: relative;
+}
+
+.producto-search-input {
+    width: 100%;
+}
+
+.producto-search-results {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-top: none;
+    background: white;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.producto-item {
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.producto-item:hover,
+.producto-item.bg-light {
+    background-color: #f8f9fa;
+}
+
+.producto-item:last-child {
+    border-bottom: none;
+}
+
+.producto-search-input:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    border-color: #80bdff;
+}
+</style>
 
 <script>
 // Tasa de cambio desde el backend - SIMPLIFICADO
@@ -341,9 +391,9 @@ function removeProductRow(event) {
 
 // Configurar event listeners para una fila
 function setupRowEventListeners(row) {
-    const productSelect = row.querySelector('.producto-select');
-    if (productSelect) {
-        productSelect.addEventListener('change', handleProductChange);
+    const productInput = row.querySelector('.producto-search-input');
+    if (productInput) {
+        setupProductSearchForInput(productInput);
     }
     
     const quantityInput = row.querySelector('.cantidad');
@@ -438,13 +488,24 @@ function addProductRow() {
     const newRow = firstRow.cloneNode(true);
     
     // Resetear valores
-    const productSelect = newRow.querySelector('.producto-select');
+    const productInput = newRow.querySelector('.producto-search-input');
+    const productHidden = newRow.querySelector('.producto-id-hidden');
+    const searchResults = newRow.querySelector('.producto-search-results');
     const priceCell = newRow.querySelector('.precio');
     const quantityInput = newRow.querySelector('.cantidad');
     const unidadCell = newRow.querySelector('.unidad');
     const subtotalCell = newRow.querySelector('.subtotal');
     
-    if (productSelect) productSelect.selectedIndex = 0;
+    if (productInput) {
+        productInput.value = '';
+    }
+    if (productHidden) {
+        productHidden.value = '';
+    }
+    if (searchResults) {
+        searchResults.style.display = 'none';
+        searchResults.innerHTML = '';
+    }
     if (priceCell) priceCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
     if (quantityInput) quantityInput.value = 1;
     if (unidadCell) unidadCell.innerHTML = '<span class="text-muted">-</span>';
@@ -486,11 +547,11 @@ function setupFormSubmitValidation() {
     if (form) {
         form.addEventListener('submit', function(event) {
             // Verificar que hay al menos un producto seleccionado
-            const productos = document.querySelectorAll('.producto-select');
+            const productosHidden = document.querySelectorAll('.producto-id-hidden');
             let hayProductosSeleccionados = false;
             
-            productos.forEach(select => {
-                if (select.selectedIndex > 0) {
+            productosHidden.forEach(hidden => {
+                if (hidden.value && hidden.value !== '') {
                     hayProductosSeleccionados = true;
                 }
             });
@@ -544,7 +605,428 @@ document.addEventListener('DOMContentLoaded', function() {
     // Actualizar management form inicialmente
     updateFormsetManagement();
     
+    // Configurar búsqueda de productos
+    setupProductSearch();
+    
     console.log('=== INICIALIZACIÓN COMPLETA ===');
 });
+
+// Función para inicializar Select2 con búsqueda AJAX
+function initializeProductSelect2(selector = '.producto-select-ajax') {
+    console.log('Inicializando Select2 para:', selector);
+    
+    // Verificar que jQuery y Select2 estén disponibles
+    if (typeof $ === 'undefined') {
+        console.error('jQuery no está disponible');
+        return;
+    }
+    
+    if (!$.fn.select2) {
+        console.error('Select2 no está disponible');
+        return;
+    }
+    
+    var $elements = $(selector);
+    console.log('Elementos encontrados:', $elements.length);
+    
+    if ($elements.length === 0) {
+        console.error('No se encontraron elementos con selector:', selector);
+        return;
+    }
+    
+    $elements.each(function() {
+        var $element = $(this);
+        console.log('Inicializando Select2 en elemento:', $element[0]);
+        
+        // Destruir Select2 existente si hay uno
+        if ($element.hasClass('select2-hidden-accessible')) {
+            $element.select2('destroy');
+        }
+        
+        $element.select2({
+            placeholder: 'Buscar producto...',
+            allowClear: true,
+            minimumInputLength: 0,
+            ajax: {
+                url: '/api/productos/buscar/',
+                dataType: 'json',
+                delay: 250,
+                data: function(params) {
+                    console.log('Búsqueda para:', params.term);
+                    return {
+                        q: params.term || ''
+                    };
+                },
+                processResults: function(data) {
+                    console.log('API devolvió:', data);
+                    if (data && data.results) {
+                        return {
+                            results: data.results
+                        };
+                    }
+                    return { results: [] };
+                },
+                cache: true
+            },
+            templateResult: function(producto) {
+                if (producto.loading) {
+                    return producto.text;
+                }
+                
+                if (!producto.id) {
+                    return producto.text;
+                }
+                
+                var html = '<div>';
+                html += '<div>' + (producto.text || producto.nombre) + '</div>';
+                if (producto.precio) {
+                    html += '<small>Precio: $' + producto.precio + '</small>';
+                }
+                if (producto.stock) {
+                    html += ' <small>Stock: ' + producto.stock + '</small>';
+                }
+                html += '</div>';
+                
+                return $(html);
+            },
+            templateSelection: function(producto) {
+                return producto.text || producto.nombre || producto.id;
+            }
+        }).on('select2:select', function(e) {
+            console.log('Producto seleccionado:', e.params.data);
+            handleProductSelect2Change(this, e.params.data);
+        }).on('select2:clear', function(e) {
+            console.log('Producto deseleccionado');
+            handleProductSelect2Clear(this);
+        });
+    });
+}
+
+// Función para manejar la selección de producto con Select2
+function handleProductSelect2Change(selectElement, productData) {
+    console.log('=== PRODUCTO SELECCIONADO VIA SELECT2 ===');
+    console.log('Datos del producto:', productData);
+    
+    const row = selectElement.closest('.fila-producto');
+    if (!row) {
+        console.error('No se encontró la fila');
+        return;
+    }
+    
+    const priceCell = row.querySelector('.precio');
+    const quantityInput = row.querySelector('.cantidad');
+    const subtotalCell = row.querySelector('.subtotal');
+    const unidadCell = row.querySelector('.unidad');
+    
+    if (productData.precio && productData.stock !== undefined) {
+        const price = parseFloat(productData.precio);
+        const stock = parseFloat(productData.stock);
+        const unidad = productData.unidad || 'UN';
+        
+        console.log('Actualizando con datos:', { price, stock, unidad });
+        
+        // Actualizar precio mostrado
+        const priceBs = price * tasaCambio;
+        if (priceCell) {
+            const priceFormatted = formatCurrency(price);
+            priceCell.innerHTML = `<strong>${priceFormatted}</strong><br><small class="text-muted">${priceBs.toFixed(2)} Bs</small>`;
+        }
+        
+        // Mostrar unidad de medida
+        if (unidadCell) {
+            unidadCell.innerHTML = `<span class="text-info">${unidad}</span>`;
+        }
+        
+        // Configurar input de cantidad
+        if (quantityInput) {
+            quantityInput.max = stock;
+            quantityInput.setAttribute('data-precio', price);
+            quantityInput.setAttribute('data-stock', stock);
+            quantityInput.setAttribute('data-unidad', unidad);
+            
+            if (parseFloat(quantityInput.value) > stock) {
+                quantityInput.value = Math.min(1, stock);
+            }
+        }
+        
+        // Calcular subtotal
+        updateSubtotal(row);
+    }
+}
+
+// Función para limpiar cuando se deselecciona un producto
+function handleProductSelect2Clear(selectElement) {
+    const row = selectElement.closest('.fila-producto');
+    if (!row) return;
+    
+    const priceCell = row.querySelector('.precio');
+    const subtotalCell = row.querySelector('.subtotal');
+    const unidadCell = row.querySelector('.unidad');
+    const quantityInput = row.querySelector('.cantidad');
+    
+    // Resetear valores
+    if (priceCell) priceCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
+    if (unidadCell) unidadCell.innerHTML = '<span class="text-muted">-</span>';
+    if (subtotalCell) subtotalCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
+    if (quantityInput) {
+        quantityInput.removeAttribute('data-precio');
+        quantityInput.removeAttribute('data-stock');
+        quantityInput.removeAttribute('data-unidad');
+        quantityInput.max = '';
+    }
+    
+    updateTotal();
+}
+
+// Función para configurar búsqueda de productos
+function setupProductSearch() {
+    console.log('Configurando búsqueda de productos...');
+    
+    const searchInputs = document.querySelectorAll('.producto-search-input');
+    searchInputs.forEach(input => {
+        setupProductSearchForInput(input);
+    });
+}
+
+// Configurar búsqueda para un input específico
+function setupProductSearchForInput(input) {
+    const container = input.closest('.producto-search-container');
+    const hiddenInput = container.querySelector('.producto-id-hidden');
+    const resultsDiv = container.querySelector('.producto-search-results');
+    
+    let searchTimeout;
+    let currentSelection = -1;
+    let products = [];
+    
+    // Event listener para búsqueda
+    input.addEventListener('input', function() {
+        const query = this.value.trim();
+        
+        clearTimeout(searchTimeout);
+        
+        if (query.length < 2) {
+            resultsDiv.style.display = 'none';
+            hiddenInput.value = '';
+            clearProductSelection(input);
+            return;
+        }
+        
+        searchTimeout = setTimeout(() => {
+            searchProducts(query, resultsDiv, hiddenInput, input);
+        }, 300);
+    });
+    
+    // Event listener para navegación con teclado
+    input.addEventListener('keydown', function(e) {
+        const items = resultsDiv.querySelectorAll('.producto-item');
+        
+        switch(e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                currentSelection = Math.min(currentSelection + 1, items.length - 1);
+                updateSelection(items, currentSelection);
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                currentSelection = Math.max(currentSelection - 1, -1);
+                updateSelection(items, currentSelection);
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (currentSelection >= 0 && items[currentSelection]) {
+                    selectProduct(items[currentSelection], hiddenInput, input, resultsDiv);
+                }
+                break;
+            case 'Escape':
+                resultsDiv.style.display = 'none';
+                currentSelection = -1;
+                break;
+        }
+    });
+    
+    // Cerrar resultados al hacer clic fuera
+    document.addEventListener('click', function(e) {
+        if (!container.contains(e.target)) {
+            resultsDiv.style.display = 'none';
+        }
+    });
+}
+
+// Buscar productos
+function searchProducts(query, resultsDiv, hiddenInput, input) {
+    fetch(`/api/productos/buscar/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.results) {
+                displaySearchResults(data.results, resultsDiv, hiddenInput, input);
+            }
+        })
+        .catch(error => {
+            console.error('Error al buscar productos:', error);
+        });
+}
+
+// Mostrar resultados de búsqueda
+function displaySearchResults(products, resultsDiv, hiddenInput, input) {
+    if (products.length === 0) {
+        resultsDiv.innerHTML = '<div class="p-2 text-muted">No se encontraron productos</div>';
+        resultsDiv.style.display = 'block';
+        return;
+    }
+    
+    let html = '';
+    products.forEach((product, index) => {
+        html += `
+            <div class="producto-item p-2 border-bottom" 
+                 data-id="${product.id}"
+                 data-nombre="${product.text}"
+                 data-precio="${product.precio}"
+                 data-stock="${product.stock}"
+                 data-unidad="${product.unidad}"
+                 style="cursor: pointer;">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <strong>${product.text}</strong>
+                    </div>
+                    <div class="text-right">
+                        <span class="badge badge-success">$${parseFloat(product.precio).toFixed(2)}</span>
+                        <span class="badge badge-info">Stock: ${parseFloat(product.stock).toFixed(1)}</span>
+                    </div>
+                </div>
+                ${product.unidad ? `<small class="text-muted">Unidad: ${product.unidad}</small>` : ''}
+            </div>
+        `;
+    });
+    
+    resultsDiv.innerHTML = html;
+    resultsDiv.style.display = 'block';
+    
+    // Agregar event listeners a los resultados
+    const items = resultsDiv.querySelectorAll('.producto-item');
+    items.forEach(item => {
+        item.addEventListener('click', function() {
+            selectProduct(this, hiddenInput, input, resultsDiv);
+        });
+        
+        item.addEventListener('mouseenter', function() {
+            items.forEach(i => i.classList.remove('bg-light'));
+            this.classList.add('bg-light');
+        });
+    });
+}
+
+// Actualizar selección con teclado
+function updateSelection(items, index) {
+    items.forEach(item => item.classList.remove('bg-light'));
+    if (index >= 0 && items[index]) {
+        items[index].classList.add('bg-light');
+    }
+}
+
+// Seleccionar producto
+function selectProduct(item, hiddenInput, input, resultsDiv) {
+    const productId = item.dataset.id;
+    const productName = item.dataset.nombre;
+    const productPrice = parseFloat(item.dataset.precio);
+    const productStock = parseFloat(item.dataset.stock);
+    const productUnit = item.dataset.unidad;
+    
+    // Actualizar campos
+    input.value = productName;
+    hiddenInput.value = productId;
+    resultsDiv.style.display = 'none';
+    
+    // Actualizar información del producto en la fila
+    updateProductInRow(input, {
+        id: productId,
+        precio: productPrice,
+        stock: productStock,
+        unidad: productUnit
+    });
+}
+
+// Actualizar información del producto en la fila
+function updateProductInRow(input, productData) {
+    const row = input.closest('.fila-producto');
+    if (!row) return;
+    
+    const priceCell = row.querySelector('.precio');
+    const quantityInput = row.querySelector('.cantidad');
+    const unidadCell = row.querySelector('.unidad');
+    
+    // Actualizar precio mostrado
+    const priceBs = productData.precio * tasaCambio;
+    if (priceCell) {
+        const priceFormatted = formatCurrency(productData.precio);
+        priceCell.innerHTML = `<strong>${priceFormatted}</strong><br><small class="text-muted">${priceBs.toFixed(2)} Bs</small>`;
+    }
+    
+    // Mostrar unidad de medida
+    if (unidadCell) {
+        unidadCell.innerHTML = `<span class="text-info">${productData.unidad || 'UN'}</span>`;
+    }
+    
+    // Configurar input de cantidad
+    if (quantityInput) {
+        quantityInput.max = productData.stock;
+        if (parseFloat(quantityInput.value) > productData.stock) {
+            quantityInput.value = Math.min(1, productData.stock);
+        }
+    }
+    
+    // Calcular subtotal
+    updateSubtotal(row);
+}
+
+// Limpiar selección de producto
+function clearProductSelection(input) {
+    const row = input.closest('.fila-producto');
+    if (!row) return;
+    
+    const priceCell = row.querySelector('.precio');
+    const unidadCell = row.querySelector('.unidad');
+    const subtotalCell = row.querySelector('.subtotal');
+    const quantityInput = row.querySelector('.cantidad');
+    
+    if (priceCell) priceCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
+    if (unidadCell) unidadCell.innerHTML = '<span class="text-muted">-</span>';
+    if (subtotalCell) subtotalCell.innerHTML = '<strong>$0.00</strong><br><small class="text-muted">0.00 Bs</small>';
+    if (quantityInput) {
+        quantityInput.max = '';
+    }
+    
+    updateTotal();
+}
+
+// Función para cargar productos en un select específico
+function loadProductsForSelect(selectElement) {
+    console.log('Cargando productos para select específico...');
+    
+    fetch('/api/productos/buscar/')
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.results) {
+                // Limpiar opciones existentes
+                selectElement.innerHTML = '<option value="">Seleccione un producto...</option>';
+                
+                // Agregar productos
+                data.results.forEach(producto => {
+                    const option = document.createElement('option');
+                    option.value = producto.id;
+                    option.text = producto.text;
+                    option.setAttribute('data-precio', producto.precio);
+                    option.setAttribute('data-stock', producto.stock);
+                    option.setAttribute('data-unidad', producto.unidad);
+                    selectElement.appendChild(option);
+                });
+                
+                // Agregar event listener
+                selectElement.addEventListener('change', handleProductChangeSimple);
+            }
+        })
+        .catch(error => {
+            console.error('Error al cargar productos para select específico:', error);
+        });
+}
 </script> 
 {% endblock %}

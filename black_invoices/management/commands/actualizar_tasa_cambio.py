@@ -151,20 +151,30 @@ class Command(BaseCommand):
     def guardar_tasa(self, fecha, tasa, fuente):
         """Guarda la tasa en la base de datos"""
         try:
-            # Desactivar tasa anterior del día (si existe)
-            TasaCambio.objects.filter(fecha=fecha).update(activo=False)
-            
-            # Crear nueva tasa
-            nueva_tasa = TasaCambio.objects.create(
+            # Usar get_or_create para manejar la restricción UNIQUE
+            tasa_obj, created = TasaCambio.objects.get_or_create(
                 fecha=fecha,
-                tasa_usd_ves=tasa,
-                fuente=fuente,
-                activo=True
+                defaults={
+                    'tasa_usd_ves': tasa,
+                    'fuente': fuente,
+                    'activo': True
+                }
             )
             
-            self.stdout.write(
-                self.style.SUCCESS(f'✅ Tasa actualizada: {nueva_tasa}')
-            )
+            if not created:
+                # Actualizar tasa existente
+                tasa_obj.tasa_usd_ves = tasa
+                tasa_obj.fuente = fuente
+                tasa_obj.activo = True
+                tasa_obj.save()
+                
+                self.stdout.write(
+                    self.style.SUCCESS(f'✅ Tasa actualizada: {tasa_obj}')
+                )
+            else:
+                self.stdout.write(
+                    self.style.SUCCESS(f'✅ Nueva tasa creada: {tasa_obj}')
+                )
             
         except Exception as e:
             self.stdout.write(

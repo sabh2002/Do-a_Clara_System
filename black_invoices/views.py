@@ -535,7 +535,6 @@ class FacturaDetailView(LoginRequiredMixin, DetailView):
         try:
             venta = factura.ventas
             context['venta'] = venta
-            context['estado_autorizacion'] = venta.estado_autorizacion
         except:
             context['venta'] = None
         
@@ -810,11 +809,19 @@ class VentasPendientesView(EmpleadoRolMixin, ListView):
     roles_permitidos = ['Administrador', 'Supervisor', 'Vendedor']
     
     def get_queryset(self):
+        from django.db.models import Case, When, F
+        
         return Ventas.objects.filter(
-            credito=True, 
+            credito=True,
             status__vent_cancelada=False
+        ).annotate(
+            total_documento=Case(
+                When(factura__isnull=False, then=F('factura__total_fac')),
+                When(nota_entrega__isnull=False, then=F('nota_entrega__total')),
+                default=0
+            )
         ).exclude(
-            monto_pagado__gte=F('factura__total_fac')
+            monto_pagado__gte=F('total_documento')
         ).order_by('-id')
     
     def get_context_data(self, **kwargs):
@@ -1054,19 +1061,22 @@ class FacturaPDFView(LoginRequiredMixin, View):
         if os.path.exists(logo_path):
             p.drawImage(logo_path, - 40, height - 180, width=320, height=150, preserveAspectRatio=True, mask='auto')
         
-        # Nombre de la empresa (ajustado a la izquierda)
-        p.setFont("Helvetica-Bold", 12)
-        p.drawString(180, height - 50, "CORPORACION AGRICOLA DOÑA CLARA, C.A.")
+        # Obtener información de la empresa desde configuración
+        config = ConfiguracionSistema.get_config()
         
-        # RIF (ajustado para no sobreponerse)
+        # Nombre de la empresa
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(180, height - 50, config.nombre_empresa)
+        
+        # RIF
         p.setFont("Helvetica-Bold", 11)
-        p.drawString(180, height - 65, "RIF: J-40723051-4")
+        p.drawString(180, height - 65, f"RIF: {config.rif_empresa}")
         
         # Dirección y teléfonos
         p.setFont("Helvetica", 10)
-        p.drawString(180, height - 80, "Vda. 18 Casa Nro. 48")
-        p.drawString(180, height - 95, "Urb. Francisco de Miranda")
-        p.drawString(180, height - 110, "Teléfonos: 0424-5439427 / 0424-5874882 / 0257-2532558 ")
+        p.drawString(180, height - 80, "Vda. 18 Casa Nro 48 Urb. Francisco de Miranda")
+        p.drawString(180, height - 95, "Telf: 0424-5439427 / 0424-5874882 / 0257-2532558")
+        p.drawString(180, height - 110, "Guanare Edo. Portuguesa")
 
         # --- Datos generales ---
         p.setFont("Helvetica-Bold", 13)
@@ -1170,7 +1180,7 @@ class FacturaPDFView(LoginRequiredMixin, View):
         
         # Footer
         p.setFont("Helvetica", 8)
-        p.drawString(40, 30, "Corporacion Agricola Doña Clara- Todos los derechos reservados")
+        p.drawString(40, 30, f"{config.nombre_empresa} - Todos los derechos reservados")
 
         p.showPage()
         p.save()
@@ -1195,14 +1205,18 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         if os.path.exists(logo_path):
             p.drawImage(logo_path, -40, height - 180, width=320, height=150, preserveAspectRatio=True, mask='auto')
         
+        # Obtener información de la empresa desde configuración
+        config = ConfiguracionSistema.get_config()
+        
         # Información de empresa
         p.setFont("Helvetica-Bold", 12)
-        p.drawString(180, height - 50, "CORPORACIÓN AGRÍCOLA DOÑA CLARA C.A.")
+        p.drawString(180, height - 50, config.nombre_empresa)
         p.setFont("Helvetica-Bold", 11)
-        p.drawString(180, height - 65, "RIF: J-40723051-4")
+        p.drawString(180, height - 65, f"RIF: {config.rif_empresa}")
         p.setFont("Helvetica", 10)
-        p.drawString(180, height - 80, "Urb. Francisco de Miranda")
-        p.drawString(180, height - 95, "Teléfonos: 04245439427")
+        p.drawString(180, height - 80, "Vda. 18 Casa Nro 48 Urb. Francisco de Miranda")
+        p.drawString(180, height - 95, "Telf: 0424-5439427 / 0424-5874882 / 0257-2532558")
+        p.drawString(180, height - 110, "Guanare Edo. Portuguesa")
 
         # --- Datos generales ---
         p.setFont("Helvetica-Bold", 13)
@@ -1269,7 +1283,7 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
 
         # Footer
         p.setFont("Helvetica", 8)
-        p.drawString(40, 30, "The Black System - Sistema de Ventas")
+        p.drawString(40, 30, f"{config.nombre_empresa} - Sistema de Ventas")
 
         p.showPage()
         p.save()
@@ -1612,7 +1626,7 @@ class TasaCambioCreateView(EmpleadoRolMixin, CreateView):
 class TasaCambioUpdateView(EmpleadoRolMixin, UpdateView):
     model = TasaCambio
     template_name = 'black_invoices/configuracion/tasa_cambio_form.html'
-    fields = ['fecha', 'tasa_usd_ves', 'activa']
+    fields = ['fecha', 'tasa_usd_ves', 'activo']
     success_url = reverse_lazy('black_invoices:tasa_cambio_list')
     roles_permitidos = ['Administrador', 'Supervisor']
     
@@ -1626,6 +1640,38 @@ class TasaCambioUpdateView(EmpleadoRolMixin, UpdateView):
         messages.success(self.request, 'Tasa de cambio actualizada exitosamente')
         return super().form_valid(form)
 
+class TasaCambioManualView(EmpleadoRolMixin, CreateView):
+    """Vista para actualización manual rápida de la tasa de cambio"""
+    model = TasaCambio
+    template_name = 'black_invoices/configuracion/tasa_cambio_manual.html'
+    fields = ['tasa_usd_ves']
+    success_url = reverse_lazy('black_invoices:tasa_cambio_list')
+    roles_permitidos = ['Administrador', 'Supervisor']
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['titulo'] = 'Actualización Manual de Tasa'
+        context['tasa_actual'] = TasaCambio.get_tasa_actual()
+        context['boton'] = 'Actualizar Tasa'
+        return context
+    
+    def form_valid(self, form):
+        from django.utils import timezone
+        # Desactivar tasa anterior del día
+        hoy = timezone.now().date()
+        TasaCambio.objects.filter(fecha=hoy).update(activo=False)
+        
+        # Crear nueva tasa
+        form.instance.fecha = hoy
+        form.instance.fuente = f'Manual - {self.request.user.empleado.nombre}'
+        form.instance.activo = True
+        
+        messages.success(
+            self.request, 
+            f'Tasa actualizada manualmente: 1 USD = {form.instance.tasa_usd_ves:,.4f} VES'
+        )
+        return super().form_valid(form)
+
 
 # En views.py - Agregar esta nueva vista
 from django.http import JsonResponse
@@ -1636,15 +1682,20 @@ class ProductoSearchAPIView(View):
     def get(self, request):
         query = request.GET.get('q', '').strip()
         
-        if len(query) < 2:  # Mínimo 2 caracteres
-            return JsonResponse({'results': []})
-        
         # Buscar productos activos con stock
-        productos = Producto.objects.filter(
-            Q(nombre__icontains=query) | Q(sku__icontains=query),
-            activo=True,
-            stock__gt=0
-        ).select_related('unidad_medida')[:10]  # Máximo 10 resultados
+        if query and len(query) >= 1:
+            # Búsqueda por query
+            productos = Producto.objects.filter(
+                Q(nombre__icontains=query) | Q(sku__icontains=query),
+                activo=True,
+                stock__gt=0
+            ).select_related('unidad_medida')[:10]
+        else:
+            # Sin query, mostrar los primeros 10 productos
+            productos = Producto.objects.filter(
+                activo=True,
+                stock__gt=0
+            ).select_related('unidad_medida')[:10]
         
         # Formatear datos para Select2
         data = []

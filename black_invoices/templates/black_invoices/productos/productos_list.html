@@ -172,7 +172,7 @@
                     className: 'btn btn-danger',
                     title: tituloReporteArchivo, 
                     exportOptions: {
-                        columns: [0, 1, 2, 3, 4, 5], // #, Nombre, Precio, Stock, Estado, Última actualización
+                        columns: ':visible:not(.no-export)',
                         stripHtml: true,
                         format: {
                             body: function ( data, row, column, node ) {

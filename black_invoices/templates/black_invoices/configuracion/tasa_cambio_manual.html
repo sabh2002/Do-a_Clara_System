@@ -1,0 +1,151 @@
+{% extends 'black_invoices/base/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card card-primary">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-dollar-sign"></i> {{ titulo }}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <!-- Información de tasa actual -->
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Tasa actual:</strong> 1 USD = {{ tasa_actual }} VES
+                        <br>
+                        <small class="text-muted">
+                            Fuente: {{ tasa_actual.fuente|default:"Sistema" }} - 
+                            Fecha: {{ tasa_actual.fecha|date:"d/m/Y" }}
+                        </small>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="form-group">
+                            <label for="id_tasa_usd_ves">
+                                <i class="fas fa-exchange-alt"></i> Nueva Tasa USD/VES
+                            </label>
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">1 USD =</span>
+                                </div>
+                                {{ form.tasa_usd_ves }}
+                                <div class="input-group-append">
+                                    <span class="input-group-text">VES</span>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">
+                                Ingrese la nueva tasa de cambio. Use punto (.) como separador decimal.
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <div class="custom-control custom-checkbox">
+                                <input type="checkbox" class="custom-control-input" id="confirmar" required>
+                                <label class="custom-control-label" for="confirmar">
+                                    Confirmo que deseo actualizar la tasa de cambio
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group text-center">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> {{ boton }}
+                            </button>
+                            <a href="{% url 'black_invoices:tasa_cambio_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Card de información adicional -->
+    <div class="row mt-3">
+        <div class="col-md-8 offset-md-2">
+            <div class="card card-warning">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-exclamation-triangle"></i> Información Importante
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li>Esta actualización afectará inmediatamente todos los precios en bolívares del sistema</li>
+                        <li>La tasa anterior será reemplazada por la nueva tasa para el día de hoy</li>
+                        <li>Los precios de productos y ventas se recalcularán automáticamente</li>
+                        <li>Esta acción quedará registrada con su nombre de usuario como fuente</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.form-control {
+    font-size: 1.1rem;
+}
+
+#id_tasa_usd_ves {
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.alert-info {
+    border-left: 4px solid #17a2b8;
+}
+
+.card-warning {
+    border-left: 4px solid #ffc107;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Enfocar el campo de tasa
+    document.getElementById('id_tasa_usd_ves').focus();
+    
+    // Validación en tiempo real
+    const tasaInput = document.getElementById('id_tasa_usd_ves');
+    tasaInput.addEventListener('input', function() {
+        const valor = parseFloat(this.value);
+        
+        if (isNaN(valor) || valor <= 0) {
+            this.classList.add('is-invalid');
+        } else if (valor < 1) {
+            this.classList.add('is-invalid');
+            // Mostrar mensaje de advertencia para tasas muy bajas
+        } else {
+            this.classList.remove('is-invalid');
+            this.classList.add('is-valid');
+        }
+    });
+    
+    // Confirmación antes de enviar
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const tasa = document.getElementById('id_tasa_usd_ves').value;
+        const confirmado = document.getElementById('confirmar').checked;
+        
+        if (!confirmado) {
+            e.preventDefault();
+            alert('Debe confirmar la actualización de la tasa de cambio');
+            return false;
+        }
+        
+        if (!confirm(`¿Está seguro de actualizar la tasa de cambio a ${tasa} VES por USD?`)) {
+            e.preventDefault();
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}

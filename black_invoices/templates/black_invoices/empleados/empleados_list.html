@@ -116,7 +116,7 @@
                 className: 'btn btn-danger',
                 title: tituloReporteArchivo, 
                 exportOptions: {
-                    columns: [0, 1, 2, 3, 4, 5, 6], // #, Nombre, Apellido, Usuario, Nivel, Fecha Contratación, Estado
+                    columns: ':visible:not(.no-export)',
                     stripHtml: true,
                     format: {
                         body: function ( data, row, column, node ) {
@@ -200,7 +200,7 @@
                 title: tituloReporteArchivo, 
                 messageTop: nombreEmpresa + '\n' + rifEmpresa + '\n' + direccionEmpresa + '\n' + telefonosEmpresa + '\n\n' + tituloDelMembreteReporte + '\n\nThe Black System - ' + tituloReporteArchivo,
                 exportOptions: {
-                    columns: [0, 1, 2, 3, 4, 5, 6], 
+                    columns: ':visible:not(.no-export)',
                     format: {
                         body: function ( data, row, column, node ) {
                             if (column === 6) { // Estado
@@ -217,7 +217,7 @@
                 className: 'btn btn-dark', 
                 title: ' ', 
                 exportOptions: {
-                    columns: [0, 1, 2, 3, 4, 5, 6], 
+                    columns: ':visible:not(.no-export)',
                      format: {
                         body: function ( data, row, column, node ) {
                             if (column === 6) { // Estado

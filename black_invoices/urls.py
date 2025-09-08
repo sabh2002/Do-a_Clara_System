@@ -46,6 +46,7 @@ urlpatterns = [
     path('configuracion/tasa-cambio/', views.TasaCambioListView.as_view(), name='tasa_cambio_list'),
     path('configuracion/tasa-cambio/crear/', views.TasaCambioCreateView.as_view(), name='tasa_cambio_create'),
     path('configuracion/tasa-cambio/editar/<int:pk>/', views.TasaCambioUpdateView.as_view(), name='tasa_cambio_update'),
+    path('configuracion/tasa-cambio/manual/', views.TasaCambioManualView.as_view(), name='tasa_cambio_manual'),
     path('api/productos/buscar/', views.ProductoSearchAPIView.as_view(), name='producto_search_api'),
     path('nota-entrega/<int:pk>/pdf/', views.NotaEntregaPDFView.as_view(), name='nota_entrega_pdf'),
 

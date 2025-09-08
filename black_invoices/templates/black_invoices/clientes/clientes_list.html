@@ -168,15 +168,15 @@ $(document).ready(function() {
             {
                 extend: 'colvis',
                 text: '<i class="fas fa-columns"></i> Columnas',
-                className: 'btn btn-secondary' // Consistencia con otras tablas
+                className: 'btn btn-secondary'
             },
-            { // Botón PDF
+            { 
                 extend: 'pdf',
                 text: '<i class="fas fa-file-pdf"></i> PDF',
                 className: 'btn btn-danger',
                 title: tituloReporteArchivo,
                 exportOptions: {
-                    columns: [0, 1, 2, 3, 4, 5], // Cédula, Nombre, Teléfono, Email, Dirección, Fecha
+                    columns: ':visible:not(.no-export)',
                     stripHtml: true,
                     format: {
                         body: function ( data, row, column, node ) {

@@ -154,7 +154,7 @@ $(document).ready(function() {
                 className: 'btn btn-danger',
                 title: tituloReporteArchivo, 
                 exportOptions: {
-                    columns: [0, 1, 2, 3, 4, 5], // #, Fecha, Cliente, Vendedor, Total, Método Pago
+                    columns: ':visible:not(.no-export)',
                     stripHtml: true,
                     format: {
                         body: function ( data, row, column, node ) {
@@ -240,7 +240,7 @@ $(document).ready(function() {
                 title: tituloReporteArchivo, 
                 messageTop: nombreEmpresa + '\n' + rifEmpresa + '\n' + direccionEmpresa + '\n' + telefonosEmpresa + '\n\n' + tituloDelMembreteReporte + '\n\nThe Black System - ' + tituloReporteArchivo,
                 exportOptions: {
-                    columns: [0, 1, 2, 3, 4, 5], 
+                    columns: ':visible:not(.no-export)',
                     format: {
                         body: function ( data, row, column, node ) {
                             if (column === 5) { // Método Pago
@@ -260,7 +260,7 @@ $(document).ready(function() {
                 className: 'btn btn-dark', 
                 title: ' ', 
                 exportOptions: {
-                    columns: [0, 1, 2, 3, 4, 5], 
+                    columns: ':visible:not(.no-export)',
                     format: {
                         body: function ( data, row, column, node ) {
                             if (column === 5) { // Método Pago

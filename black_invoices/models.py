@@ -1184,10 +1184,10 @@ class ConfiguracionSistema(models.Model):
         config, created = cls.objects.get_or_create(
             pk=1,
             defaults={
-                'nombre_empresa': 'Corporación Agrícola Doña Clara',
-                'rif_empresa': 'J-00000000-0',
-                'direccion_empresa': 'Dirección de la empresa por configurar',
-                'telefono_empresa': '0000-000-0000',
+                'nombre_empresa': 'CORPORACION AGRICOLA DOÑA CLARA, C.A.',
+                'rif_empresa': 'J-40723051-4',
+                'direccion_empresa': 'Vda. 18 Casa Nro 48 Urb. Francisco de Miranda Guanare Edo. Portuguesa',
+                'telefono_empresa': '0424-5439427 / 0424-5874882 / 0257-2532558',
             }
         )
         return config
