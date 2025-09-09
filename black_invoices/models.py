@@ -1107,6 +1107,7 @@ class ConfiguracionSistema(models.Model):
     rif_empresa = models.CharField(
         max_length=20,
         verbose_name="RIF de la Empresa",
+        default='J-40723051-4',
         help_text="Ejemplo: J-12345678-9"
     )
     

@@ -33,7 +33,8 @@ from .mixins import EmpleadoRolMixin
 import os
 from django.conf import settings
 from .models import *
-
+from django.db.models import Case, When, F, DecimalField, Value
+from decimal import Decimal
 
 ###################     Dashboard       #################
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -803,6 +804,7 @@ class VentaListView(LoginRequiredMixin, ListView):
         return context
 
 class VentasPendientesView(EmpleadoRolMixin, ListView):
+    
     model = Ventas
     template_name = 'black_invoices/ventas/ventas_pendientes.html'
     context_object_name = 'ventas'
@@ -818,7 +820,8 @@ class VentasPendientesView(EmpleadoRolMixin, ListView):
             total_documento=Case(
                 When(factura__isnull=False, then=F('factura__total_fac')),
                 When(nota_entrega__isnull=False, then=F('nota_entrega__total')),
-                default=0
+                default=Value(Decimal('0.0')),     # <-- CAMBIA ESTA LÍNEA
+                output_field=DecimalField()
             )
         ).exclude(
             monto_pagado__gte=F('total_documento')
@@ -1045,7 +1048,7 @@ def ingresar(request):
     return render(request, 'black_invoices/usuarios/login.html')
 
 #################    PDF    ######################
-class FacturaPDFView(LoginRequiredMixin, View):
+""" class FacturaPDFView(LoginRequiredMixin, View):
     def get(self, request, pk):
         try:
             factura = Factura.objects.get(pk=pk)
@@ -1291,7 +1294,253 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="Nota_Entrega_{nota.numero_nota}.pdf"'
-        return response        
+        return response  """  
+
+class FacturaPDFView(LoginRequiredMixin, View):
+    def get(self, request, pk):
+        try:
+            factura = Factura.objects.get(pk=pk)
+        except Factura.DoesNotExist:
+            return HttpResponse("Factura no encontrada", status=404)
+
+        buffer = io.BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
+
+        # --- Membrete y Logo ---
+        logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
+        if os.path.exists(logo_path):
+            # Ajustado: posición X=40, Y=height-120, tamaño más apropiado
+            p.drawImage(logo_path, -40, height - 140, width=290, height=120, preserveAspectRatio=True, mask='auto')
+        
+        # Obtener información de la empresa desde configuración
+        config = ConfiguracionSistema.get_config()
+        
+        # Nombre de la empresa - ajustado para alinearse con el logo
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(180, height - 50, config.nombre_empresa)
+        
+        # RIF
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(180, height - 65, f"RIF: J-40723051-4")
+        
+        # Dirección y teléfonos
+        p.setFont("Helvetica", 10)
+        p.drawString(180, height - 80, "Vda. 18 Casa Nro 48 Urb. Francisco de Miranda")
+        p.drawString(180, height - 95, "Telf: 0424-5439427 / 0424-5874882 / 0257-2532558")
+        p.drawString(180, height - 110, "Guanare Edo. Portuguesa")
+
+        # --- Datos generales ---
+        p.setFont("Helvetica-Bold", 13)
+        p.drawString(50, height - 140, f"FACTURA FISCAL Nº: {factura.id:04d}")  # Ajustado Y para dar espacio al logo
+        p.setFont("Helvetica", 10)
+        fecha_impresion = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+        p.drawString(400, height - 140, f"Fecha impresión: {fecha_impresion}")
+        p.drawString(400, height - 155, f"Nº Control: {factura.id:04d}")
+        p.drawString(400, height - 170, f"Fecha: {factura.fecha_fac.strftime('%d-%m-%Y %H:%M')}")
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(400, height - 185, f"VENDEDOR: {factura.empleado.nombre} {factura.empleado.apellido}")
+        p.setFont("Helvetica", 10)
+        p.drawString(400, height - 200, f"CONDICIÓN: {factura.get_metodo_pag_display()}")
+
+        # --- Datos del cliente ---
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(50, height - 170, f"CLIENTE:")
+        p.setFont("Helvetica", 10)
+        p.drawString(50, height - 185, f"TLF: {factura.cliente.telefono}")
+        p.drawString(50, height - 200, f"NOMBRE: {factura.cliente.nombre} {factura.cliente.apellido}")
+        p.drawString(50, height - 215, f"DIRECCIÓN FISCAL: {factura.cliente.direccion}")
+
+        # --- Tabla de productos ---
+        detalles = factura.detallefactura_set.all()
+        data = [["#", "Código", "Producto", "Cant.", "Garantía", "Precio", "Desc.", "Total"]]
+        
+        for idx, detalle in enumerate(detalles, 1):
+            codigo = str(detalle.producto.id)  # Mostrar el id del producto
+            data.append([
+                str(idx),
+                codigo,
+                detalle.producto.nombre,
+                str(detalle.cantidad),
+                "Sí",  # Presentación (añadido según imagen)
+                f"{detalle.producto.precio:,.2f}",
+                "0,00",  # Descuento
+                f"{detalle.sub_total:,.2f}"
+            ])
+        
+        # Añadir solo una fila vacía para mantener el espacio
+        if len(data) < 3:  # Si solo tenemos el encabezado y un producto
+            data.append(["", "", "", "", "", "", "", ""])  # Solo una fila vacía
+        
+        # Añadir fila de totales
+        data.append(["", "", "", "", "", "", "TOTAL", f"{factura.total_fac:,.2f}"])
+        
+        # Crear tabla con 8 columnas (añadimos Presen.)
+        table = Table(data, colWidths=[25, 60, 160, 40, 50, 60, 50, 60])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('GRID', (0, 0), (-1, -2), 0.5, colors.black),  # Grid para todas las filas excepto la última
+            ('LINEABOVE', (6, -1), (7, -1), 0.5, colors.black),  # Línea solo arriba de "TOTAL" y su valor
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ALIGN', (3, 1), (7, -1), 'RIGHT'),  # Alinear a la derecha desde Cant. hasta Total
+            ('FONTNAME', (6, -1), (7, -1), 'Helvetica-Bold'),  # Negrita para "TOTAL" y su valor
+        ]))
+        
+        table.wrapOn(p, width, height)
+        table.drawOn(p, 40, height - 340 - 20 * min(len(data), 6))  # Ajustado para logo más grande
+
+        # --- Sección de descuentos (como en la imagen 2) ---
+        p.setFont("Helvetica", 8)
+        p.drawString(430, 130, "DESC. POR PRODUCTOS")
+        p.drawString(550, 130, "0,00 BS")
+        p.drawString(430, 120, "DESC. (30.00)")
+        p.drawString(550, 120, "0,00 BS")
+        
+        # Línea horizontal debajo de descuentos
+        p.line(430, 115, 580, 115)
+        
+        # Total general
+        p.setFont("Helvetica-Bold", 9)
+        p.drawString(430, 100, "TOTAL")
+        p.drawString(550, 100, f"{factura.total_fac:,.2f} BS")
+
+        # --- Nota y pie de página ---
+        # Nota completa con saltos de línea adecuados
+        p.setFont("Helvetica", 8)
+        nota = "NO SE ACEPTAN PAGOS DE DIVISAS EN EFECTIVO HECHOS AL ASESOR DE VENTA NI AL SUPERVISOR, ASÍ COMO TAMPOCO BS EN EFECTIVO, PAGO MÓVIL O TRANSFERENCIAS A LAS CUENTAS PERSONALES DEL ASESOR O DEL SUPERVISOR. SOLO SE RECONOCERÁN LOS PAGOS HECHOS A LAS CUENTAS DE LA EMPRESA."
+        
+        # Dividir nota en líneas de máximo 100 caracteres
+        nota_lineas = []
+        for i in range(0, len(nota), 100):
+            nota_lineas.append(nota[i:i+100])
+        
+        # Dibujar cada línea de la nota
+        for i, linea in enumerate(nota_lineas):
+            p.drawString(40, 80 - (i * 10), linea)
+        
+        # Paginación (ajustada para no sobreponerse)
+        p.drawString(470, 30, f"Página 1 de 1")
+        
+        # Footer
+        p.setFont("Helvetica", 8)
+        p.drawString(40, 30, f"{config.nombre_empresa} - Todos los derechos reservados")
+
+        p.showPage()
+        p.save()
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="Factura_{factura.id}.pdf"'
+        return response
+
+class NotaEntregaPDFView(LoginRequiredMixin, View):
+    def get(self, request, pk):
+        try:
+            nota = NotaEntrega.objects.get(pk=pk)
+        except NotaEntrega.DoesNotExist:
+            return HttpResponse("Nota de Entrega no encontrada", status=404)
+
+        buffer = io.BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
+
+        # --- Membrete y Logo ---
+        logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
+        if os.path.exists(logo_path):
+            # Ajustado: posición X=40, Y=height-120, tamaño más apropiado
+            p.drawImage(logo_path, - 40, height - 140, width=290, height=120, preserveAspectRatio=True, mask='auto')
+        
+        # Obtener información de la empresa desde configuración
+        config = ConfiguracionSistema.get_config()
+        
+        # Información de empresa
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(180, height - 50, config.nombre_empresa)
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(180, height - 65, f"RIF: {config.rif_empresa}")
+        p.setFont("Helvetica", 10)
+        p.drawString(180, height - 80, "Vda. 18 Casa Nro 48 Urb. Francisco de Miranda")
+        p.drawString(180, height - 95, "Telf: 0424-5439427 / 0424-5874882 / 0257-2532558")
+        p.drawString(180, height - 110, "Guanare Edo. Portuguesa")
+
+        # --- Datos generales ---
+        p.setFont("Helvetica-Bold", 13)
+        p.drawString(50, height - 140, f"NOTA DE ENTREGA Nº:{nota.numero_nota:04d} ")  # Ajustado Y para dar espacio al logo
+        p.setFont("Helvetica", 10)
+        fecha_impresion = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+        p.drawString(400, height - 140, f"Fecha impresión: {fecha_impresion}")
+        p.drawString(400, height - 155, f"Nº Nota: {nota.numero_nota:06d}")
+        p.drawString(400, height - 170, f"Fecha: {nota.fecha_nota.strftime('%d-%m-%Y %H:%M')}")
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(400, height - 185, f"VENDEDOR: {nota.empleado.nombre} {nota.empleado.apellido}")
+
+        # --- Datos del cliente ---
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(50, height - 170, f"CLIENTE:")
+        p.setFont("Helvetica", 10)
+        p.drawString(50, height - 185, f"TLF: {nota.cliente.telefono}")
+        p.drawString(50, height - 200, f"NOMBRE: {nota.cliente.nombre} {nota.cliente.apellido}")
+        p.drawString(50, height - 215, f"DIRECCIÓN: {nota.cliente.direccion}")
+
+        # --- Tabla de productos ---
+        detalles = nota.detalles_nota.all()
+        data = [["#", "Código", "Producto", "Cant.", "Unidad", "Precio", "Total"]]
+        
+        for idx, detalle in enumerate(detalles, 1):
+            codigo = detalle.producto.sku or str(detalle.producto.id)
+            unidad = detalle.producto.unidad_medida.abreviatura if detalle.producto.unidad_medida else "UN"
+            data.append([
+                str(idx),
+                codigo,
+                detalle.producto.nombre,
+                str(detalle.cantidad),
+                unidad,
+                f"${detalle.precio_unitario:,.2f}",
+                f"${detalle.subtotal_linea:,.2f}"
+            ])
+        
+        # Fila de totales
+        data.append(["", "", "", "", "", "TOTAL", f"${nota.total:,.2f}"])
+        
+        # Crear tabla
+        table = Table(data, colWidths=[25, 60, 180, 40, 40, 60, 60])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('GRID', (0, 0), (-1, -2), 0.5, colors.black),
+            ('LINEABOVE', (5, -1), (6, -1), 0.5, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ALIGN', (3, 1), (6, -1), 'RIGHT'),
+            ('FONTNAME', (5, -1), (6, -1), 'Helvetica-Bold'),
+        ]))
+        
+        table.wrapOn(p, width, height)
+        table.drawOn(p, 40, height - 360)  # Ajustado para nuevo espacio
+
+        # --- Nota importante ---
+        p.setFont("Helvetica", 8)
+        nota_texto = "NOTA IMPORTANTE: Este documento es una NOTA DE ENTREGA. La Factura Fiscal se generará al completar el pago."
+        p.drawString(40, 100, nota_texto)
+
+        # Footer
+        p.setFont("Helvetica", 8)
+        p.drawString(40, 30, f"{config.nombre_empresa} - Sistema de Ventas")
+
+        p.showPage()
+        p.save()
+        buffer.seek(0)
+        
+        response = HttpResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="Nota_Entrega_{nota.numero_nota}.pdf"'
+        return response     
     
 from django.http import HttpResponse, JsonResponse
 from django.core.management import call_command

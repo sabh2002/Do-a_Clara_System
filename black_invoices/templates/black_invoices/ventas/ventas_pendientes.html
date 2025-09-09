@@ -44,9 +44,19 @@
                 {% for venta in ventas %}
                 <tr>
                     <td>{{ venta.id }}</td>
-                    <td data-sort="{{ venta.factura.fecha_fac|date:'Y-m-d H:i:s' }}">{{ venta.factura.fecha_fac|date:"d/m/Y H:i" }}</td>
-                    <td>{{ venta.factura.cliente.nombre }} {{ venta.factura.cliente.apellido }}</td>
-                    <td>${{ venta.factura.total_fac|floatformat:2 }}</td>
+                    {% if venta.factura %}
+                        <td data-sort="{{ venta.factura.fecha_fac|date:'Y-m-d H:i:s' }}">{{ venta.factura.fecha_fac|date:"d/m/Y H:i" }}</td>
+                        <td>{{ venta.factura.cliente.nombre }} {{ venta.factura.cliente.apellido }}</td>
+                        <td>${{ venta.factura.total_fac|floatformat:2 }}</td>
+                    {% elif venta.nota_entrega %}
+                        <td data-sort="{{ venta.nota_entrega.fecha_nota|date:'Y-m-d H:i:s' }}">{{ venta.nota_entrega.fecha_nota|date:"d/m/Y H:i" }}</td>
+                        <td>{{ venta.nota_entrega.cliente.nombre }} {{ venta.nota_entrega.cliente.apellido }}</td>
+                        <td>${{ venta.nota_entrega.total|floatformat:2 }}</td>
+                    {% else %}
+                        <td>-</td>
+                        <td>Sin documento</td>
+                        <td>$0.00</td>
+                    {% endif %}
                     <td>${{ venta.monto_pagado|floatformat:2 }}</td>
                     <td>${{ venta.saldo_pendiente|floatformat:2 }}</td>
                     <td>
