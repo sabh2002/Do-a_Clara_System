@@ -38,36 +38,36 @@ from decimal import Decimal
 ###################     Dashboard       #################
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'black_invoices/home.html'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Dashboard'
-        
+
         # Fechas para filtros
         hoy = datetime.now().date()
         inicio_mes = hoy.replace(day=1)
         inicio_anio = hoy.replace(month=1, day=1)
-        
+
         # Estadísticas generales
         context['total_ventas_hoy'] = Factura.objects.filter(
             fecha_fac__date=hoy
         ).aggregate(total=Sum('total_fac'))['total'] or 0
-        
+
         context['total_ventas_mes'] = Factura.objects.filter(
             fecha_fac__gte=inicio_mes
         ).aggregate(total=Sum('total_fac'))['total'] or 0
-        
+
         context['total_ventas_anio'] = Factura.objects.filter(
             fecha_fac__gte=inicio_anio
         ).aggregate(total=Sum('total_fac'))['total'] or 0
-        
+
         # Productos más vendidos
         context['productos_top'] = DetalleFactura.objects.values(
             'producto__nombre'
         ).annotate(
             total=Sum('cantidad')
         ).order_by('-total')[:5]
-        
+
         # Ventas por empleado este mes
         context['ventas_empleados'] = Factura.objects.filter(
             fecha_fac__gte=inicio_mes
@@ -77,7 +77,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             total=Sum('total_fac'),
             cantidad=Count('id')
         ).order_by('-total')
-        
+
         # Datos para gráfico de ventas por día (últimos 15 días)
         quince_dias_atras = hoy - timedelta(days=14)
         ventas_por_dia = Factura.objects.filter(
@@ -87,29 +87,29 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ).values('dia').annotate(
             total=Sum('total_fac')
         ).order_by('dia')
-        
+
         # Formatear para Chart.js
         labels = []
         datos = []
-        
+
         for venta in ventas_por_dia:
             labels.append(venta['dia'].strftime('%d/%m'))
             datos.append(float(venta['total']))
-        
+
         context['chart_labels'] = labels
         context['chart_data'] = datos
-        
+
         # Alertas de stock bajo
         context['productos_stock_bajo'] = Producto.objects.filter(
             stock__lte=5,  # Umbral configurable
             activo=True
         ).order_by('stock')
-        
+
         return context
 class BaseListView(LoginRequiredMixin, ListView):
     template_name = 'lista_generica.html'
     context_object_name = 'objetos'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = self.titulo
@@ -121,16 +121,16 @@ class ClienteListView(LoginRequiredMixin, ListView):
     model = Cliente
     template_name = 'black_invoices/clientes/clientes_list.html'
     context_object_name = 'clientes'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Lista de Clientes'
         context['create_url'] = reverse_lazy('black_invoices:cliente_create')
-        
+
         # Estadísticas adicionales
         clientes = self.get_queryset()
         hoy = date.today()
-        
+
         context['estadisticas'] = {
             'total_clientes': clientes.count(),
             'con_email': clientes.filter(email__isnull=False).exclude(email='').count(),
@@ -140,7 +140,7 @@ class ClienteListView(LoginRequiredMixin, ListView):
                 fecha_registro__year=hoy.year
             ).count()
         }
-        
+
         return context
 
 class ClienteCreateView(LoginRequiredMixin, CreateView):
@@ -148,20 +148,20 @@ class ClienteCreateView(LoginRequiredMixin, CreateView):
     form_class = ClienteForm
     template_name = 'black_invoices/clientes/cliente_form.html'
     success_url = reverse_lazy('black_invoices:cliente_list')
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Registrar Cliente'
         context['action'] = 'Registrar'
         return context
-    
+
     def form_valid(self, form):
         messages.success(
-            self.request, 
+            self.request,
             f'Cliente {form.instance.nombre_completo} (Cédula: {form.instance.cedula_formateada}) registrado exitosamente.'
         )
         return super().form_valid(form)
-    
+
     def form_invalid(self, form):
         messages.error(
             self.request,
@@ -173,15 +173,15 @@ class ClienteDetailView(LoginRequiredMixin, DetailView):
     model = Cliente
     template_name = 'black_invoices/clientes/cliente_detail.html'
     context_object_name = 'cliente'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         cliente = self.get_object()
-        
+
         # Obtener historial de ventas/facturas del cliente
         facturas = Factura.objects.filter(cliente=cliente).order_by('-fecha_fac')
         context['facturas'] = facturas
-        
+
         # Estadísticas del cliente
         context['estadisticas_cliente'] = {
             'total_facturas': facturas.count(),
@@ -189,30 +189,30 @@ class ClienteDetailView(LoginRequiredMixin, DetailView):
             'ultima_compra': facturas.first().fecha_fac if facturas.exists() else None,
             'primera_compra': facturas.last().fecha_fac if facturas.exists() else None,
         }
-        
+
         return context
 
 class ClienteUpdateView(LoginRequiredMixin, UpdateView):
     model = Cliente
     form_class = ClienteForm
     template_name = 'black_invoices/clientes/cliente_form.html'
-    
+
     def get_success_url(self):
         return reverse_lazy('black_invoices:cliente_detail', kwargs={'pk': self.object.pk})
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = f'Editar Cliente: {self.object.nombre_completo}'
         context['action'] = 'Actualizar'
         return context
-    
+
     def form_valid(self, form):
         messages.success(
-            self.request, 
+            self.request,
             f'Cliente {form.instance.nombre_completo} actualizado exitosamente'
         )
         return super().form_valid(form)
-    
+
     def form_invalid(self, form):
         messages.error(
             self.request,
@@ -227,13 +227,13 @@ def buscar_cliente_por_cedula(request):
     """
     if request.method == 'GET' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         cedula = request.GET.get('cedula', '')
-        
+
         if cedula:
             try:
                 # Normalizar cédula
                 cedula_normalizada = cedula.replace('-', '').upper()
                 cliente = Cliente.objects.get(cedula=cedula_normalizada)
-                
+
                 data = {
                     'encontrado': True,
                     'cliente': {
@@ -249,17 +249,17 @@ def buscar_cliente_por_cedula(request):
                 data = {'encontrado': False, 'mensaje': 'Cliente no encontrado'}
         else:
             data = {'encontrado': False, 'mensaje': 'Cédula requerida'}
-        
+
         return JsonResponse(data)
-    
+
     return JsonResponse({'error': 'Método no permitido'}, status=405)
-    
+
 ######################      PRODUCTOS       ###############
 class ProductoListView(LoginRequiredMixin, ListView):
     model = Producto
     template_name = 'black_invoices/productos/productos_list.html'
     context_object_name = 'productos'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Lista de Productos'
@@ -271,13 +271,13 @@ class ProductoCreateView(LoginRequiredMixin, CreateView):
     form_class = ProductoForm
     template_name = 'black_invoices/productos/producto_form.html'
     success_url = reverse_lazy('black_invoices:producto_list')
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Crear Producto'
         context['action'] = 'Crear'
         return context
-    
+
     def form_valid(self, form):
         messages.success(self.request, 'Producto creado exitosamente.')
         return super().form_valid(form)
@@ -287,65 +287,65 @@ class ProductoStockUpdateView(LoginRequiredMixin, UpdateView):
     template_name = 'black_invoices/productos/producto_stock.html'
     fields = ['stock']
     success_url = reverse_lazy('black_invoices:producto_list')
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = f'Actualizar Stock: {self.object.nombre}'
         return context
-    
+
     def form_valid(self, form):
         # Guardar stock anterior para mensaje
         stock_anterior = self.object.stock
-        
+
         # Guardar formulario
         response = super().form_valid(form)
-        
+
         # Mostrar mensaje con el cambio
         messages.success(
-            self.request, 
+            self.request,
             f'Stock de {self.object.nombre} actualizado de {stock_anterior} a {self.object.stock}'
         )
-        
+
         return response
-    
+
 # En views.py, añade estas clases
 
 class ProductoDetailView(LoginRequiredMixin, DetailView):
     model = Producto
     template_name = 'black_invoices/productos/producto_detail.html'
     context_object_name = 'producto'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = f'Detalles del Producto: {self.object.nombre}'
-        
+
         # Obtener historial de ventas de este producto (opcional)
         context['detalles_ventas'] = DetalleFactura.objects.filter(
             producto=self.object
         ).order_by('-factura__fecha_fac')[:10]  # Últimas 10 ventas
-        
+
         # Información adicional del producto con nuevos campos
         context['precios_formateados'] = self.object.get_precios_formateados_completos()
         context['precios_iva'] = self.object.get_precios_iva_formateados()
         context['stock_status'] = self.object.get_stock_status()
         context['margen_ganancia'] = self.object.get_margen_ganancia()
-        
+
         return context
 
 class ProductoUpdateView(LoginRequiredMixin, UpdateView):
     model = Producto
     form_class = ProductoForm
     template_name = 'black_invoices/productos/producto_form.html'
-    
+
     def get_success_url(self):
         return reverse_lazy('black_invoices:producto_detail', kwargs={'pk': self.object.pk})
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = f'Editar Producto: {self.object.nombre}'
         context['action'] = 'Actualizar'
         return context
-    
+
     def form_valid(self, form):
         messages.success(self.request, f'Producto {self.object.nombre} actualizado exitosamente.')
         return super().form_valid(form)
@@ -353,18 +353,18 @@ class ProductosMasVendidosView(LoginRequiredMixin, ListView):
     model = Producto
     template_name = 'black_invoices/productos/productos_mas_vendidos.html'
     context_object_name = 'productos'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Productos Más Vendidos'
-        
+
         # Obtener parámetros de fecha del request
         fecha_inicio = self.request.GET.get('fecha_inicio')
         fecha_fin = self.request.GET.get('fecha_fin')
-        
+
         # Filtros base
         filtros = {}
-        
+
         if fecha_inicio:
             try:
                 fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
@@ -372,7 +372,7 @@ class ProductosMasVendidosView(LoginRequiredMixin, ListView):
                 context['fecha_inicio'] = fecha_inicio
             except ValueError:
                 pass
-                
+
         if fecha_fin:
             try:
                 fecha_fin_obj = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
@@ -380,14 +380,14 @@ class ProductosMasVendidosView(LoginRequiredMixin, ListView):
                 context['fecha_fin'] = fecha_fin
             except ValueError:
                 pass
-        
+
         # Si no hay filtros de fecha, usar el mes actual por defecto
         if not fecha_inicio and not fecha_fin:
             hoy = datetime.now().date()
             inicio_mes = hoy.replace(day=1)
             filtros['factura__fecha_fac__date__gte'] = inicio_mes
             context['periodo_default'] = f"Mes actual ({inicio_mes.strftime('%B %Y')})"
-        
+
         # Consulta principal: productos más vendidos
         productos_vendidos = DetalleFactura.objects.filter(
             **filtros
@@ -395,16 +395,16 @@ class ProductosMasVendidosView(LoginRequiredMixin, ListView):
             factura__ventas__status__vent_cancelada=True  # Excluir ventas canceladas
         ).values(
             'producto__id',
-            'producto__nombre', 
+            'producto__nombre',
             'producto__precio'
         ).annotate(
             total_vendido=Sum('cantidad'),
             total_ingresos=Sum(F('cantidad') * F('producto__precio')),
             numero_ventas=Count('factura', distinct=True)
         ).order_by('-total_vendido')
-        
+
         context['productos_vendidos'] = productos_vendidos
-        
+
         # Estadísticas adicionales
         if productos_vendidos:
             context['producto_top'] = productos_vendidos[0]
@@ -416,32 +416,32 @@ class ProductosMasVendidosView(LoginRequiredMixin, ListView):
             context['total_productos_diferentes'] = 0
             context['total_unidades_vendidas'] = 0
             context['total_ingresos_productos'] = 0
-            
+
         return context
-    
+
 ########################        EMPLEADOS       #############
 class EmpleadoListView(EmpleadoRolMixin, ListView):
     model = Empleado
     template_name = 'black_invoices/empleados/empleados_list.html'
     context_object_name = 'empleados'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Lista de Empleados'
         return context
-    
+
 class EmpleadoCreateView(EmpleadoRolMixin, CreateView):
     model = Empleado
     form_class = EmpleadoForm
     template_name = 'black_invoices/empleados/empleado_form.html'
     success_url = reverse_lazy('black_invoices:empleado_list')
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Crear Nuevo Empleado'
         context['accion'] = 'Crear'
         return context
-    
+
     def form_valid(self, form):
         try:
             with transaction.atomic():
@@ -452,12 +452,12 @@ class EmpleadoCreateView(EmpleadoRolMixin, CreateView):
                     first_name=form.cleaned_data['nombre'],
                     last_name=form.cleaned_data['apellido']
                 )
-                
+
                 # Crear empleado
                 empleado = form.save(commit=False)
                 empleado.user = user
                 empleado.save()
-                
+
                 messages.success(self.request, f'Empleado {empleado.nombre} creado exitosamente')
                 return redirect(self.success_url)
         except Exception as e:
@@ -469,13 +469,13 @@ class EmpleadoUpdateView(EmpleadoRolMixin, UpdateView):
     form_class = EmpleadoForm
     template_name = 'black_invoices/empleados/empleado_form.html'
     success_url = reverse_lazy('black_invoices:empleado_list')
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = f'Editar Empleado: {self.object.nombre}'
         context['accion'] = 'Actualizar'
         return context
-    
+
     def form_valid(self, form):
         try:
             with transaction.atomic():
@@ -484,28 +484,28 @@ class EmpleadoUpdateView(EmpleadoRolMixin, UpdateView):
                 user.username = form.cleaned_data['username']
                 user.first_name = form.cleaned_data['nombre']
                 user.last_name = form.cleaned_data['apellido']
-                
+
                 # Actualizar contraseña si se proporcionó
                 if form.cleaned_data['password']:
                     user.set_password(form.cleaned_data['password'])
-                    
+
                 user.save()
-                
+
                 # Guardar cambios en empleado
                 empleado = form.save()
-                
+
                 messages.success(self.request, f'Empleado {empleado.nombre} actualizado exitosamente')
                 return redirect(self.success_url)
         except Exception as e:
             messages.error(self.request, f'Error al actualizar empleado: {str(e)}')
             return self.form_invalid(form)
-    
+
 #######################     FACTURAS        ######################
 class FacturaListView(LoginRequiredMixin, ListView):
     model = Factura
     template_name = 'black_invoices/facturas/facturas_list.html'
     context_object_name = 'facturas'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Lista de Recibos'
@@ -519,25 +519,25 @@ class FacturaDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         factura = self.get_object()
-        
+
         # Detalles de la factura
-        context['detalles'] = factura.get_detalles().order_by('id') 
+        context['detalles'] = factura.get_detalles().order_by('id')
         context['titulo'] = f'Detalle de Factura N° {factura.numero_factura or factura.id}'
-        
+
         # Información de totales con IVA
         context['totales_formateados'] = factura.get_totales_formateados()
-        
+
         # Configuración del sistema para mostrar IVA
         config = ConfiguracionSistema.get_config()
         context['config_sistema'] = config
-        
+
         # Información de la venta asociada (si existe)
         try:
             venta = factura.ventas
             context['venta'] = venta
         except:
             context['venta'] = None
-        
+
         return context
 
 def ingresar(request):
@@ -556,7 +556,7 @@ def ingresar(request):
 
 
 
-#####################       VENTAS      #######################       
+#####################       VENTAS      #######################
 from django.views.generic import CreateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
@@ -566,11 +566,11 @@ from django.contrib import messages
 
 class VentaCreateView(LoginRequiredMixin, View):
     template_name = 'black_invoices/ventas/venta_form.html'
-    
+
     def get(self, request):
         # Obtener tasa de cambio actual
         tasa_actual = TasaCambio.get_tasa_actual()
-        
+
         context = {
             'titulo': 'Crear Venta',
             'clientes': Cliente.objects.all(),
@@ -582,7 +582,7 @@ class VentaCreateView(LoginRequiredMixin, View):
             'tasa_cambio': tasa_actual.tasa_usd_ves if tasa_actual else 1
         }
         return render(request, self.template_name, context)
-    
+
     def post(self, request):
         try:
             with transaction.atomic():
@@ -590,23 +590,23 @@ class VentaCreateView(LoginRequiredMixin, View):
                 if not hasattr(request.user, 'empleado'):
                     messages.error(request, 'No tienes un perfil de empleado asociado.')
                     return redirect('black_invoices:venta_create')
-                
+
                 # 2. Obtener cliente y método de pago
                 cliente_id = request.POST.get('cliente')
                 metodo_pago = request.POST.get('metodo_pag')
-                
+
                 if not cliente_id:
                     messages.error(request, 'Debe seleccionar un cliente.')
                     return redirect('black_invoices:venta_create')
-                
+
                 # 3. Recopilar detalles de productos
                 productos = []
                 total_forms = int(request.POST.get('form-TOTAL_FORMS', 0))
-                
+
                 for i in range(total_forms):
                     producto_id = request.POST.get(f'form-{i}-producto')
                     cantidad_str = request.POST.get(f'form-{i}-cantidad')
-                    
+
                     if producto_id and cantidad_str:
                         try:
                             cantidad = float(cantidad_str)
@@ -617,15 +617,15 @@ class VentaCreateView(LoginRequiredMixin, View):
                                 })
                         except ValueError:
                             continue
-                
+
                 if not productos:
                     messages.error(request, 'Debe agregar al menos un producto a la venta.')
                     return redirect('black_invoices:venta_create')
-                
+
                 # 4. Determinar tipo de venta
                 cliente = Cliente.objects.get(pk=cliente_id)
                 es_credito = request.POST.get('tipo_venta') == 'credito'
-                
+
                 # 5. Crear estados necesarios
                 if es_credito:
                     estado, created = StatusVentas.objects.get_or_create(
@@ -643,7 +643,7 @@ class VentaCreateView(LoginRequiredMixin, View):
                             'vent_cancelada': False
                         }
                     )
-                
+
                 if es_credito:
                     # ==================== FLUJO CRÉDITO: NOTA DE ENTREGA ====================
                     # Crear nota de entrega
@@ -653,17 +653,17 @@ class VentaCreateView(LoginRequiredMixin, View):
                         empleado=request.user.empleado,
                         numero_nota=config.get_siguiente_numero_nota_entrega()
                     )
-                    
+
                     # Procesar productos y crear detalles de nota
                     for prod in productos:
                         try:
                             producto = Producto.objects.get(pk=prod['id'])
                             cantidad = Decimal(str(prod['cantidad']))
-                            
+
                             # Verificar stock
                             if cantidad > producto.stock:
                                 raise ValueError(f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}")
-                            
+
                             # Crear detalle de nota de entrega
                             DetalleNotaEntrega.objects.create(
                                 nota_entrega=nota,
@@ -671,17 +671,17 @@ class VentaCreateView(LoginRequiredMixin, View):
                                 cantidad=cantidad,
                                 precio_unitario=producto.precio
                             )
-                            
+
                             # Descontar stock
                             producto.stock -= cantidad
                             producto.save(update_fields=['stock'])
-                            
+
                         except Producto.DoesNotExist:
                             raise ValueError(f"El producto con ID {prod['id']} no existe.")
-                    
+
                     # Calcular totales de la nota
                     nota.calcular_totales()
-                    
+
                     # Crear venta referenciando nota de entrega
                     venta = Ventas.objects.create(
                         empleado=request.user.empleado,
@@ -690,13 +690,13 @@ class VentaCreateView(LoginRequiredMixin, View):
                         credito=True,
                         monto_pagado=0
                     )
-                    
+
                     # Mensaje específico para crédito
                     tasa_actual = TasaCambio.get_tasa_actual()
                     if tasa_actual:
                         total_bs = nota.total * tasa_actual.tasa_usd_ves
                         messages.success(
-                            request, 
+                            request,
                             f'Venta a crédito #{venta.id} creada exitosamente. '
                             f'Nota de Entrega #{nota.numero_nota} generada. '
                             f'Total: ${nota.total:,.2f} ({total_bs:,.2f} Bs). '
@@ -704,12 +704,12 @@ class VentaCreateView(LoginRequiredMixin, View):
                         )
                     else:
                         messages.success(
-                            request, 
+                            request,
                             f'Venta a crédito #{venta.id} creada exitosamente. '
                             f'Nota de Entrega #{nota.numero_nota} generada. '
                             f'Total: ${nota.total:,.2f}.'
                         )
-                
+
                 else:
                     # ==================== FLUJO CONTADO: FACTURA DIRECTA ====================
                     # Crear factura inmediatamente
@@ -719,7 +719,7 @@ class VentaCreateView(LoginRequiredMixin, View):
                         metodo_pag=metodo_pago
                     )
                     factura.save()
-                    
+
                     # Obtener tipo de factura
                     try:
                         tipo_factura = TipoFactura.objects.get(credito_fac=False, contado_fac=True)
@@ -728,17 +728,17 @@ class VentaCreateView(LoginRequiredMixin, View):
                             credito_fac=False,
                             contado_fac=True
                         )
-                    
+
                     # Procesar productos y crear detalles de factura
                     for prod in productos:
                         try:
                             producto = Producto.objects.get(pk=prod['id'])
                             cantidad = Decimal(str(prod['cantidad']))
-                            
+
                             # Verificar stock
                             if cantidad > producto.stock:
                                 raise ValueError(f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}")
-                            
+
                             # Crear detalle de factura
                             DetalleFactura.objects.create(
                                 factura=factura,
@@ -747,17 +747,17 @@ class VentaCreateView(LoginRequiredMixin, View):
                                 tipo_factura=tipo_factura,
                                 sub_total=producto.precio * cantidad
                             )
-                            
+
                             # Descontar stock
                             producto.stock -= cantidad
                             producto.save(update_fields=['stock'])
-                            
+
                         except Producto.DoesNotExist:
                             raise ValueError(f"El producto con ID {prod['id']} no existe.")
-                    
+
                     # Calcular totales de la factura
                     factura.calcular_total_mejorado()
-                    
+
                     # Crear venta referenciando factura
                     venta = Ventas.objects.create(
                         empleado=request.user.empleado,
@@ -766,13 +766,13 @@ class VentaCreateView(LoginRequiredMixin, View):
                         credito=False,
                         monto_pagado=factura.total_fac
                     )
-                    
+
                     # Mensaje específico para contado
                     tasa_actual = TasaCambio.get_tasa_actual()
                     if tasa_actual:
                         total_bs = factura.total_fac * tasa_actual.tasa_usd_ves
                         messages.success(
-                            request, 
+                            request,
                             f'Venta #{venta.id} completada exitosamente. '
                             f'Factura Fiscal #{factura.numero_factura} generada. '
                             f'Total: ${factura.total_fac:,.2f} ({total_bs:,.2f} Bs). '
@@ -780,14 +780,14 @@ class VentaCreateView(LoginRequiredMixin, View):
                         )
                     else:
                         messages.success(
-                            request, 
+                            request,
                             f'Venta #{venta.id} completada exitosamente. '
                             f'Factura Fiscal #{factura.numero_factura} generada. '
                             f'Total: ${factura.total_fac:,.2f}. Pago recibido.'
                         )
-                
+
                 return redirect('black_invoices:venta_detail', pk=venta.id)
-                
+
         except Exception as e:
             messages.error(request, f"Error: {str(e)}")
             return redirect('black_invoices:venta_create')
@@ -795,24 +795,24 @@ class VentaListView(LoginRequiredMixin, ListView):
     model = Ventas
     template_name = 'black_invoices/ventas/ventas_list.html'
     context_object_name = 'ventas'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Lista de Ventas'
         context['create_url'] = reverse_lazy('black_invoices:venta_create')
-        
+
         return context
 
 class VentasPendientesView(EmpleadoRolMixin, ListView):
-    
+
     model = Ventas
     template_name = 'black_invoices/ventas/ventas_pendientes.html'
     context_object_name = 'ventas'
     roles_permitidos = ['Administrador', 'Supervisor', 'Vendedor']
-    
+
     def get_queryset(self):
         from django.db.models import Case, When, F
-        
+
         return Ventas.objects.filter(
             credito=True,
             status__vent_cancelada=False
@@ -826,57 +826,57 @@ class VentasPendientesView(EmpleadoRolMixin, ListView):
         ).exclude(
             monto_pagado__gte=F('total_documento')
         ).order_by('-id')
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Abonos (Crédito)'
         return context
-    
+
 
 class RegistrarPagoView(EmpleadoRolMixin, UpdateView):
     model = Ventas
     template_name = 'black_invoices/ventas/registrar_pago.html'
     fields = []
     roles_permitidos = ['Administrador', 'Supervisor', 'Vendedor']
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = f'Registrar Pago - Venta #{self.object.id}'
         context['venta'] = self.object
         context['metodos_pago'] = PagoVenta.METODOS_PAGO_CHOICES
-        
+
         # Agregar tasa de cambio actual
         tasa_actual = TasaCambio.get_tasa_actual()
         context['tasa_cambio'] = tasa_actual.tasa_usd_ves if tasa_actual else 1
-        
+
         return context
-    
+
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
-        
+
         try:
             monto = float(request.POST.get('monto', 0))
             metodo_pago = request.POST.get('metodo_pago', 'efectivo')
             referencia = request.POST.get('referencia', '').strip()
-            
+
             if monto <= 0:
                 messages.error(request, 'El monto debe ser mayor a cero.')
                 return self.get(request, *args, **kwargs)
-            
+
             if monto > (self.object.saldo_pendiente + Decimal(0.01)):
                 messages.error(request, f'El monto excede el saldo pendiente (${self.object.saldo_pendiente}).')
                 return self.get(request, *args, **kwargs)
-            
+
             # Validar referencia para métodos que la requieren
             if metodo_pago in ['pago_movil', 'transferencia'] and not referencia:
                 messages.error(request, f'La referencia es obligatoria para {dict(PagoVenta.METODOS_PAGO_CHOICES)[metodo_pago]}.')
                 return self.get(request, *args, **kwargs)
-            
+
             # Registrar pago usando el método con transacciones atómicas
             pago = self.object.registrar_pago(monto, metodo_pago, referencia)
-            
+
             metodo_display = dict(PagoVenta.METODOS_PAGO_CHOICES).get(metodo_pago, metodo_pago)
-            
+
             # ==================== LÓGICA DE CONVERSIÓN A FACTURA ====================
             if self.object.completada and self.object.credito:
                 # Venta completada y es a crédito
@@ -884,50 +884,50 @@ class RegistrarPagoView(EmpleadoRolMixin, UpdateView):
                     try:
                         # Convertir nota de entrega a factura fiscal
                         factura = self.object.nota_entrega.convertir_a_factura()
-                        
+
                         messages.success(
-                            request, 
+                            request,
                             f'Pago de ${monto} registrado vía {metodo_display}. '
                             f'Venta completada y Factura Fiscal #{factura.numero_factura} generada automáticamente.'
                         )
                     except Exception as e:
                         # Si falla la conversión, registrar el pago pero alertar
                         messages.warning(
-                            request, 
+                            request,
                             f'Pago de ${monto} registrado vía {metodo_display}. '
                             f'Venta completada, pero hubo un error al generar la factura: {str(e)}'
                         )
                 else:
                     # Ya tiene factura o ya fue convertida
                     messages.success(
-                        request, 
+                        request,
                         f'Pago de ${monto} registrado vía {metodo_display}. '
                         f'Venta completada.'
                     )
             elif self.object.completada and not self.object.credito:
                 # Venta de contado completada (caso raro, pero por si acaso)
                 messages.success(
-                    request, 
+                    request,
                     f'Pago de ${monto} registrado vía {metodo_display}. '
                     f'Venta completada.'
                 )
             else:
                 # Pago parcial - venta aún pendiente
                 messages.success(
-                    request, 
+                    request,
                     f'Pago de ${monto} registrado vía {metodo_display}. '
                     f'Saldo pendiente: ${self.object.saldo_pendiente}'
                 )
-            
+
             return redirect('black_invoices:ventas_pendientes')
-            
+
         except ValueError:
             messages.error(request, 'Por favor ingrese un monto válido.')
             return self.get(request, *args, **kwargs)
         except Exception as e:
             messages.error(request, f'Error al procesar el pago: {str(e)}')
             return self.get(request, *args, **kwargs)
-        
+
 class VentaDetailView(LoginRequiredMixin, DetailView):
     model = Ventas
     template_name = 'black_invoices/ventas/venta_detail.html'
@@ -948,23 +948,23 @@ class VentaDetailView(LoginRequiredMixin, DetailView):
         else:
             context['detalles'] = []
             context['totales_formateados'] = {}
-        
+
         # Estado de la venta con nuevos campos - USANDO PROPIEDADES ACTUALIZADAS
         context['saldo_pendiente'] = venta.saldo_pendiente if venta.credito else 0
         context['completada'] = venta.completada
-        
+
         # Historial de pagos si es a crédito
         if venta.credito:
             context['pagos'] = venta.pagos.all().order_by('-fecha')
             context['resumen_pagos'] = venta.resumen_pagos()
-        
+
         return context
 
 @login_required
 def cancelar_venta(request, pk):
     try:
         venta = Ventas.objects.get(pk=pk)
-        
+
         # Comprobar que la venta no esté ya cancelada
         if venta.status.vent_cancelada:
             messages.warning(request, 'La venta ya está cancelada.')
@@ -972,19 +972,19 @@ def cancelar_venta(request, pk):
             try:
                 # Obtener empleado que realiza la cancelación
                 empleado_cancelador = request.user.empleado
-                
+
                 # Usar el método correcto del modelo con transacciones atómicas
                 venta.cancelar_venta()
                 messages.success(request, f'Venta #{venta.id} cancelada exitosamente. Stock restaurado.')
-                
+
             except ValueError as e:
                 messages.error(request, f'Error al cancelar venta: {str(e)}')
-    
+
     except Ventas.DoesNotExist:
         messages.error(request, 'Venta no encontrada.')
     except AttributeError:
         messages.error(request, 'Usuario sin permisos de empleado para cancelar ventas.')
-    
+
     return redirect('black_invoices:venta_list')
 
 
@@ -992,7 +992,7 @@ from django.db.models import Q
 
 class UserProfileUpdateView(LoginRequiredMixin, UpdateView):
     model = Empleado
-    form_class = UserProfileForm 
+    form_class = UserProfileForm
     template_name = 'black_invoices/usuarios/perfil_form.html' # Nueva plantilla
     success_url = reverse_lazy('black_invoices:perfil_usuario_editar') # Redirige a la misma página
 
@@ -1009,7 +1009,7 @@ class UserProfileUpdateView(LoginRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         # El método save del UserProfileForm ya maneja la actualización de User y Empleado.
-        form.save() 
+        form.save()
         messages.success(self.request, 'Tu perfil ha sido actualizado exitosamente.')
         return super().form_valid(form) # Esto redirigirá a success_url
 
@@ -1024,10 +1024,10 @@ class UserProfileUpdateView(LoginRequiredMixin, UpdateView):
              for error in form.non_field_errors():
                 error_list_html += f"<li><strong>Error general:</strong> {error}</li>"
         error_list_html += "</ul>"
-        
+
         messages.error(self.request, f"Error al actualizar el perfil. Por favor, corrija los problemas indicados:{error_list_html}", extra_tags='safe')
         return super().form_invalid(form)
-    
+
 def logout_view(request):
     logout(request)
     return redirect('black_invoices:login')
@@ -1063,18 +1063,18 @@ def ingresar(request):
         logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
         if os.path.exists(logo_path):
             p.drawImage(logo_path, - 40, height - 180, width=320, height=150, preserveAspectRatio=True, mask='auto')
-        
+
         # Obtener información de la empresa desde configuración
         config = ConfiguracionSistema.get_config()
-        
+
         # Nombre de la empresa
         p.setFont("Helvetica-Bold", 12)
         p.drawString(180, height - 50, config.nombre_empresa)
-        
+
         # RIF
         p.setFont("Helvetica-Bold", 11)
         p.drawString(180, height - 65, f"RIF: {config.rif_empresa}")
-        
+
         # Dirección y teléfonos
         p.setFont("Helvetica", 10)
         p.drawString(180, height - 80, "Vda. 18 Casa Nro 48 Urb. Francisco de Miranda")
@@ -1105,7 +1105,7 @@ def ingresar(request):
         # --- Tabla de productos ---
         detalles = factura.detallefactura_set.all()
         data = [["#", "Código", "Producto", "Cant.", "Garantía", "Precio", "Desc.", "Total"]]
-        
+
         for idx, detalle in enumerate(detalles, 1):
             codigo = str(detalle.producto.id)  # Mostrar el id del producto
             data.append([
@@ -1118,14 +1118,14 @@ def ingresar(request):
                 "0,00",  # Descuento
                 f"{detalle.sub_total:,.2f}"
             ])
-        
+
         # Añadir solo una fila vacía para mantener el espacio
         if len(data) < 3:  # Si solo tenemos el encabezado y un producto
             data.append(["", "", "", "", "", "", "", ""])  # Solo una fila vacía
-        
+
         # Añadir fila de totales
         data.append(["", "", "", "", "", "", "TOTAL", f"{factura.total_fac:,.2f}"])
-        
+
         # Crear tabla con 8 columnas (añadimos Presen.)
         table = Table(data, colWidths=[25, 60, 160, 40, 50, 60, 50, 60])
         table.setStyle(TableStyle([
@@ -1141,7 +1141,7 @@ def ingresar(request):
             ('ALIGN', (3, 1), (7, -1), 'RIGHT'),  # Alinear a la derecha desde Cant. hasta Total
             ('FONTNAME', (6, -1), (7, -1), 'Helvetica-Bold'),  # Negrita para "TOTAL" y su valor
         ]))
-        
+
         table.wrapOn(p, width, height)
         table.drawOn(p, 40, height - 320 - 20 * min(len(data), 6))  # Ajustar altura según número de filas
 
@@ -1151,10 +1151,10 @@ def ingresar(request):
         p.drawString(550, 130, "0,00 BS")
         p.drawString(430, 120, "DESC. (30.00)")
         p.drawString(550, 120, "0,00 BS")
-        
+
         # Línea horizontal debajo de descuentos
         p.line(430, 115, 580, 115)
-        
+
         # Total general
         p.setFont("Helvetica-Bold", 9)
         p.drawString(430, 100, "TOTAL")
@@ -1164,23 +1164,23 @@ def ingresar(request):
         # Nota completa con saltos de línea adecuados
         p.setFont("Helvetica", 8)
         nota = "NO SE ACEPTAN PAGOS DE DIVISAS EN EFECTIVO HECHOS AL ASESOR DE VENTA NI AL SUPERVISOR, ASÍ COMO TAMPOCO BS EN EFECTIVO, PAGO MÓVIL O TRANSFERENCIAS A LAS CUENTAS PERSONALES DEL ASESOR O DEL SUPERVISOR. SOLO SE RECONOCERÁN LOS PAGOS HECHOS A LAS CUENTAS DE LA EMPRESA."
-        
+
         # Dividir nota en líneas de máximo 100 caracteres
         nota_lineas = []
         for i in range(0, len(nota), 100):
             nota_lineas.append(nota[i:i+100])
-        
+
         # Dibujar cada línea de la nota
         for i, linea in enumerate(nota_lineas):
             p.drawString(40, 80 - (i * 10), linea)
-        
+
         # Referencias y tasa de cambio
         # p.drawString(40, 50, f"REFERENCIA: {getattr(factura, 'referencia', '')}")
         # p.drawString(200, 50, f"T.C.: {getattr(factura, 'tasa_cambio', '---')}")
-        
+
         # Paginación (ajustada para no sobreponerse)
         p.drawString(470, 30, f"Página 1 de 1")
-        
+
         # Footer
         p.setFont("Helvetica", 8)
         p.drawString(40, 30, f"{config.nombre_empresa} - Todos los derechos reservados")
@@ -1207,10 +1207,10 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
         if os.path.exists(logo_path):
             p.drawImage(logo_path, -40, height - 180, width=320, height=150, preserveAspectRatio=True, mask='auto')
-        
+
         # Obtener información de la empresa desde configuración
         config = ConfiguracionSistema.get_config()
-        
+
         # Información de empresa
         p.setFont("Helvetica-Bold", 12)
         p.drawString(180, height - 50, config.nombre_empresa)
@@ -1243,7 +1243,7 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         # --- Tabla de productos ---
         detalles = nota.detalles_nota.all()
         data = [["#", "Código", "Producto", "Cant.", "Unidad", "Precio", "Total"]]
-        
+
         for idx, detalle in enumerate(detalles, 1):
             codigo = detalle.producto.sku or str(detalle.producto.id)
             unidad = detalle.producto.unidad_medida.abreviatura if detalle.producto.unidad_medida else "UN"
@@ -1256,10 +1256,10 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
                 f"${detalle.precio_unitario:,.2f}",
                 f"${detalle.subtotal_linea:,.2f}"
             ])
-        
+
         # Fila de totales
         data.append(["", "", "", "", "", "TOTAL", f"${nota.total:,.2f}"])
-        
+
         # Crear tabla
         table = Table(data, colWidths=[25, 60, 180, 40, 40, 60, 60])
         table.setStyle(TableStyle([
@@ -1275,7 +1275,7 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
             ('ALIGN', (3, 1), (6, -1), 'RIGHT'),
             ('FONTNAME', (5, -1), (6, -1), 'Helvetica-Bold'),
         ]))
-        
+
         table.wrapOn(p, width, height)
         table.drawOn(p, 40, height - 350)
 
@@ -1291,10 +1291,10 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         p.showPage()
         p.save()
         buffer.seek(0)
-        
+
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="Nota_Entrega_{nota.numero_nota}.pdf"'
-        return response  """  
+        return response  """
 
 class FacturaPDFView(LoginRequiredMixin, View):
     def get(self, request, pk):
@@ -1312,22 +1312,22 @@ class FacturaPDFView(LoginRequiredMixin, View):
         if os.path.exists(logo_path):
             # Logo con tamaño personalizado ya ajustado
             p.drawImage(logo_path, - 40, height - 140, width=290, height=120, preserveAspectRatio=True, mask='auto')
-        
+
         # Obtener información de la empresa desde configuración
         config = ConfiguracionSistema.get_config()
-        
+
         # Obtener tasa de cambio actual
         tasa_actual = TasaCambio.get_tasa_actual()
         tasa_usd_ves = tasa_actual.tasa_usd_ves if tasa_actual else Decimal('1.0')
-        
+
         # Nombre de la empresa
         p.setFont("Helvetica-Bold", 12)
         p.drawString(180, height - 50, config.nombre_empresa)
-        
+
         # RIF
         p.setFont("Helvetica-Bold", 11)
         p.drawString(180, height - 65, f"RIF: {config.rif_empresa}")
-        
+
         # Dirección y teléfonos
         p.setFont("Helvetica", 10)
         p.drawString(180, height - 80, "Vda. 18 Casa Nro 48 Urb. Francisco de Miranda")
@@ -1358,12 +1358,12 @@ class FacturaPDFView(LoginRequiredMixin, View):
         # --- Tabla de productos ---
         detalles = factura.detallefactura_set.all()
         data = [["#", "Código", "Producto", "Cant.", "Garantía", "Precio", "Precio Bs", "Total"]]
-        
+
         for idx, detalle in enumerate(detalles, 1):
             codigo = str(detalle.producto.id)
             precio_bs = detalle.producto.precio * tasa_usd_ves
             total_bs = detalle.sub_total * tasa_usd_ves
-            
+
             data.append([
                 str(idx),
                 codigo,
@@ -1374,10 +1374,10 @@ class FacturaPDFView(LoginRequiredMixin, View):
                 f"{precio_bs:,.2f}",  # Precio en Bs
                 f"${detalle.sub_total:,.2f}"
             ])
-        
+
         # Añadir fila de totales (SIN filas vacías adicionales)
         data.append(["", "", "", "", "", "", "TOTAL", f"${factura.total_fac:,.2f}"])
-        
+
         # Crear tabla con 8 columnas
         table = Table(data, colWidths=[25, 60, 140, 40, 50, 60, 60, 60])
         table.setStyle(TableStyle([
@@ -1394,31 +1394,31 @@ class FacturaPDFView(LoginRequiredMixin, View):
             ('ALIGN', (6, 1), (6, -2), 'RIGHT'),  # Precio Bs alineado a la derecha
             ('FONTNAME', (6, -1), (7, -1), 'Helvetica-Bold'),  # Negrita para "TOTAL" y su valor
         ]))
-        
+
         table.wrapOn(p, width, height)
         table.drawOn(p, 40, height - 340 - 20 * min(len(data), 6))
 
         # --- Sección de totales con ambas monedas ---
         p.setFont("Helvetica", 8)
-        
+
         # Calcular totales en Bs
         subtotal_bs = factura.subtotal * tasa_usd_ves
         iva_bs = factura.iva * tasa_usd_ves
         total_bs = factura.total_fac * tasa_usd_ves
-        
+
         # Subtotal
         p.drawString(430, 140, "SUBTOTAL")
         p.drawString(500, 140, f"${factura.subtotal:,.2f}")
         p.drawString(550, 140, f"{subtotal_bs:,.2f} Bs")
-        
+
         # IVA
         p.drawString(430, 130, f"IVA ({config.porcentaje_iva}%)")
         p.drawString(500, 130, f"${factura.iva:,.2f}")
         p.drawString(550, 130, f"{iva_bs:,.2f} Bs")
-        
+
         # Línea horizontal
         p.line(430, 125, 580, 125)
-        
+
         # Total general
         p.setFont("Helvetica-Bold", 9)
         p.drawString(430, 110, "TOTAL")
@@ -1428,19 +1428,19 @@ class FacturaPDFView(LoginRequiredMixin, View):
         # --- Nota y pie de página ---
         p.setFont("Helvetica", 8)
         nota = "NO SE ACEPTAN PAGOS DE DIVISAS EN EFECTIVO HECHOS AL ASESOR DE VENTA NI AL SUPERVISOR, ASÍ COMO TAMPOCO BS EN EFECTIVO, PAGO MÓVIL O TRANSFERENCIAS A LAS CUENTAS PERSONALES DEL ASESOR O DEL SUPERVISOR. SOLO SE RECONOCERÁN LOS PAGOS HECHOS A LAS CUENTAS DE LA EMPRESA."
-        
+
         # Dividir nota en líneas de máximo 100 caracteres
         nota_lineas = []
         for i in range(0, len(nota), 100):
             nota_lineas.append(nota[i:i+100])
-        
+
         # Dibujar cada línea de la nota
         for i, linea in enumerate(nota_lineas):
             p.drawString(40, 80 - (i * 10), linea)
-        
+
         # Paginación
         p.drawString(470, 30, f"Página 1 de 1")
-        
+
         # Footer
         p.setFont("Helvetica", 8)
         p.drawString(40, 30, f"{config.nombre_empresa} - Todos los derechos reservados")
@@ -1468,14 +1468,14 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         if os.path.exists(logo_path):
             # Logo con tamaño personalizado ya ajustado
             p.drawImage(logo_path, - 40, height - 140, width=290, height=120, preserveAspectRatio=True, mask='auto')
-        
+
         # Obtener información de la empresa desde configuración
         config = ConfiguracionSistema.get_config()
-        
+
         # Obtener tasa de cambio actual
         tasa_actual = TasaCambio.get_tasa_actual()
         tasa_usd_ves = tasa_actual.tasa_usd_ves if tasa_actual else Decimal('1.0')
-        
+
         # Información de empresa
         p.setFont("Helvetica-Bold", 12)
         p.drawString(180, height - 50, config.nombre_empresa)
@@ -1508,13 +1508,13 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         # --- Tabla de productos ---
         detalles = nota.detalles_nota.all()
         data = [["#", "Código", "Producto", "Cant.", "Unidad", "Precio", "Precio Bs", "Total"]]
-        
+
         for idx, detalle in enumerate(detalles, 1):
             codigo = detalle.producto.sku or str(detalle.producto.id)
             unidad = detalle.producto.unidad_medida.abreviatura if detalle.producto.unidad_medida else "UN"
             precio_bs = detalle.precio_unitario * tasa_usd_ves
             total_bs = detalle.subtotal_linea * tasa_usd_ves
-            
+
             data.append([
                 str(idx),
                 codigo,
@@ -1525,10 +1525,10 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
                 f"{precio_bs:,.2f}",  # Precio en Bs
                 f"${detalle.subtotal_linea:,.2f}"
             ])
-        
+
         # Fila de totales
         data.append(["", "", "", "", "", "", "TOTAL", f"${nota.total:,.2f}"])
-        
+
         # Crear tabla
         table = Table(data, colWidths=[25, 60, 160, 40, 40, 60, 60, 60])
         table.setStyle(TableStyle([
@@ -1545,31 +1545,31 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
             ('ALIGN', (6, 1), (6, -2), 'RIGHT'),  # Precio Bs alineado a la derecha
             ('FONTNAME', (6, -1), (7, -1), 'Helvetica-Bold'),
         ]))
-        
+
         table.wrapOn(p, width, height)
         table.drawOn(p, 40, height - 360)
 
         # --- Totales con ambas monedas ---
         p.setFont("Helvetica", 8)
-        
+
         # Calcular totales en Bs
         subtotal_bs = nota.subtotal * tasa_usd_ves
         iva_bs = nota.iva * tasa_usd_ves
         total_bs = nota.total * tasa_usd_ves
-        
+
         # Subtotal
         p.drawString(430, 140, "SUBTOTAL")
         p.drawString(500, 140, f"${nota.subtotal:,.2f}")
         p.drawString(550, 140, f"{subtotal_bs:,.2f} Bs")
-        
+
         # IVA
         p.drawString(430, 130, f"IVA ({config.porcentaje_iva}%)")
         p.drawString(500, 130, f"${nota.iva:,.2f}")
         p.drawString(550, 130, f"{iva_bs:,.2f} Bs")
-        
+
         # Línea horizontal
         p.line(430, 125, 580, 125)
-        
+
         # Total general
         p.setFont("Helvetica-Bold", 9)
         p.drawString(430, 110, "TOTAL")
@@ -1591,11 +1591,11 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         p.showPage()
         p.save()
         buffer.seek(0)
-        
+
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="Nota_Entrega_{nota.numero_nota}.pdf"'
-        return response    
-    
+        return response
+
 from django.http import HttpResponse, JsonResponse
 from django.core.management import call_command
 from django.contrib.auth.decorators import login_required, user_passes_test # Para vistas basadas en funciones
@@ -1606,39 +1606,39 @@ from datetime import datetime
 import os # Para manejar archivos temporales
 from django.conf import settings # Para la carpeta de archivos temporales
 from .forms.backup_forms import DatabaseImportForm # Importar el nuevo formulario
-from django.core.files.storage import FileSystemStorage    
+from django.core.files.storage import FileSystemStorage
 def export_database_view(request):
     try:
         # Usaremos un buffer en memoria para no escribir al disco innecesariamente en el servidor
         buffer = io.StringIO()
         call_command('dumpdata', 'black_invoices', indent=2, stdout=buffer) # Solo datos de black_invoices
         # Si quieres TODO: call_command('dumpdata', indent=2, stdout=buffer, exclude=['contenttypes', 'auth.Permission'])
-        
+
         buffer.seek(0)
-        
+
         # Crear la respuesta HTTP para descargar el archivo
         response = HttpResponse(buffer.getvalue(), content_type='application/json')
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         response['Content-Disposition'] = f'attachment; filename="backup_theblacksystem_{timestamp}.json"'
-        
+
         messages.success(request, "Exportación de datos completada exitosamente.")
         return response
     except Exception as e:
         messages.error(request, f"Error durante la exportación de datos: {str(e)}")
         # Considera redirigir a una página de error o de vuelta a configuraciones
         return redirect(request.META.get('HTTP_REFERER', reverse_lazy('black_invoices:inicio')))
-    
+
 def import_database_view(request):
     if request.method == 'POST':
         form = DatabaseImportForm(request.POST, request.FILES)
         if form.is_valid():
             backup_file = request.FILES['backup_file']
-            
+
             # Guardar el archivo temporalmente de forma segura
             fs = FileSystemStorage(location=os.path.join(settings.MEDIA_ROOT, 'temp_backups')) # Crea una subcarpeta 'temp_backups' en tu MEDIA_ROOT
             if not os.path.exists(fs.location):
                 os.makedirs(fs.location)
-            
+
             filename = fs.save(backup_file.name, backup_file)
             uploaded_file_path = fs.path(filename)
 
@@ -1661,7 +1661,7 @@ def import_database_view(request):
                 # Eliminar el archivo temporal después de usarlo
                 if os.path.exists(uploaded_file_path):
                     os.remove(uploaded_file_path)
-            
+
             return redirect('black_invoices:importar_datos') # Redirige a la misma página para ver el mensaje
     else:
         form = DatabaseImportForm()
@@ -1670,7 +1670,7 @@ def import_database_view(request):
         'titulo': 'Importar Base de Datos',
         'form': form
     })
-    
+
 from reportlab.lib.units import inch # Para márgenes más intuitivos
 
 class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
@@ -1679,17 +1679,17 @@ class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
             # ... (tu código para obtener filtros y productos_vendidos es el mismo) ...
             fecha_inicio = request.GET.get('fecha_inicio')
             fecha_fin = request.GET.get('fecha_fin')
-            
+
             filtros = {}
             periodo_texto = "Período no especificado" # Default
-            
+
             if fecha_inicio:
                 try:
                     fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
                     filtros['factura__fecha_fac__date__gte'] = fecha_inicio_obj
                     periodo_texto = f"Desde: {fecha_inicio_obj.strftime('%d/%m/%Y')} "
                 except ValueError: pass
-                    
+
             if fecha_fin:
                 try:
                     fecha_fin_obj = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
@@ -1699,13 +1699,13 @@ class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
                     else:
                         periodo_texto = f"Hasta: {fecha_fin_obj.strftime('%d/%m/%Y')}"
                 except ValueError: pass
-            
+
             if not fecha_inicio and not fecha_fin:
                 hoy = datetime.now().date()
                 inicio_mes = hoy.replace(day=1)
                 # Por defecto, si no hay filtro, podrías querer el mes actual o todo.
                 # Aquí asumo mes actual si no se especifica nada.
-                filtros['factura__fecha_fac__date__gte'] = inicio_mes 
+                filtros['factura__fecha_fac__date__gte'] = inicio_mes
                 filtros['factura__fecha_fac__date__lte'] = hoy # Hasta hoy
                 periodo_texto = f"Período: {inicio_mes.strftime('%B %Y')}"
 
@@ -1715,7 +1715,7 @@ class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
             ).exclude(
                 factura__ventas__status__vent_cancelada=True
             ).values(
-                'producto__nombre', 
+                'producto__nombre',
                 'producto__precio'
             ).annotate(
                 total_vendido=Sum('cantidad'),
@@ -1733,33 +1733,32 @@ class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
             margin_right = 0.75 * inch
             margin_top = 0.75 * inch
             margin_bottom = 0.75 * inch
-            
+
             content_width = width - margin_left - margin_right
-            
+
             # Posición Y actual, comenzando desde arriba (después del margen superior)
             current_y = height - margin_top
 
             # --- Membrete y Logo ---
-            logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/the_black.jpeg')
+            logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
             logo_height = 60 # Altura estimada del logo + texto empresa
             if os.path.exists(logo_path):
-                p.drawImage(logo_path, margin_left, current_y - 70, width=120, height=60, 
-                            preserveAspectRatio=True, mask='auto')
-            
+                p.drawImage(logo_path, - 40, height - 145, width=290, height=120, preserveAspectRatio=True, mask='auto')
+
             p.setFont("Helvetica-Bold", 12)
-            p.drawString(margin_left + 140, current_y - 10, "INDUSTRIA & HERRAMIENTA EL NEGRITO, C.A.")
+            p.drawString(margin_left + 140, current_y - 0, "CORPORACION AGRICOLA DOÑA CLARA, C.A.")
             p.setFont("Helvetica-Bold", 11)
-            p.drawString(margin_left + 140, current_y - 25, "RIF: J-406050717")
+            p.drawString(margin_left + 140, current_y - 25, "RIF: J-40723051-4")
             p.setFont("Helvetica", 10)
-            p.drawString(margin_left + 140, current_y - 40, "CR 10 ENTRE CALLES 4 Y 5 EDIF DOÑA EDITH PISO 1 OF 2")
-            p.drawString(margin_left + 140, current_y - 55, "BARRIO MATURIN GUANARE PORTUGUESA")
-            p.drawString(margin_left + 140, current_y - 70, "Teléfonos: 0257-5143082 / 0257-5143082")
+            p.drawString(margin_left + 140, current_y - 40, "Vda. 18 Casa Nro 48")
+            p.drawString(margin_left + 140, current_y - 55, " Urb. Francisco de Miranda Guanare Edo. Portuguesa")
+            p.drawString(margin_left + 140, current_y - 70, "Teléfonos: 0424-5439427 / 0424-5874882 / 0257-2532558")
             current_y -= (logo_height + 30) # Espacio para el membrete + un poco más
 
             # --- Título del reporte ---
             p.setFont("Helvetica-Bold", 14)
             p.drawString(margin_left, current_y, "REPORTE - PRODUCTOS MÁS VENDIDOS")
-            current_y -= 20 
+            current_y -= 20
 
             # --- Período y Fecha de generación ---
             p.setFont("Helvetica", 11)
@@ -1773,18 +1772,18 @@ class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
                 producto_top = productos_vendidos[0]
                 total_unidades = sum(item['total_vendido'] for item in productos_vendidos)
                 total_ingresos_global = sum(item['total_ingresos'] for item in productos_vendidos)
-                
+
                 p.setFont("Helvetica-Bold", 11)
                 p.drawString(margin_left, current_y, "RESUMEN:")
                 current_y -= 20
                 p.setFont("Helvetica", 10)
-                
+
                 resumen_y_start = current_y
                 p.drawString(margin_left, current_y, f"Producto #1: {producto_top['producto__nombre']}")
                 current_y -= 15
                 p.drawString(margin_left, current_y, f"Unidades vendidas (Top 1): {producto_top['total_vendido']}")
                 current_y = resumen_y_start # Volver al Y del inicio de la segunda columna de resumen
-                
+
                 p.drawString(margin_left + content_width / 2, current_y, f"Total productos diferentes (Top 20): {productos_vendidos.count()}")
                 current_y -= 15
                 p.drawString(margin_left + content_width / 2, current_y, f"Total unidades vendidas (Top 20): {total_unidades}")
@@ -1801,9 +1800,9 @@ class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
             p.setFont("Helvetica-Bold", 12)
             p.drawString(margin_left, current_y, "DETALLE DE PRODUCTOS:")
             current_y -= 25 # Espacio antes de la tabla (un poco más)
-            
+
             data = [["#", "Producto", "Unid. Vendidas", "Precio Unit.", "Ventas", "Total Ingresos"]]
-            
+
             for idx, producto in enumerate(productos_vendidos, 1):
                 nombre_prod = producto['producto__nombre']
                 # El truncado se manejará mejor con el wordwrap de la tabla
@@ -1815,10 +1814,10 @@ class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
                     str(producto['numero_ventas']),
                     f"${producto['total_ingresos']:,.2f}"
                 ])
-            
+
             if not productos_vendidos: # Si no hay productos en la lista
                 data.append(["", "No hay productos para detallar en el período.", "", "", "", ""])
-            
+
             # Anchos de columna ajustados para usar mejor el content_width
             # Suma debe ser igual o menor a content_width
             # Ejemplo: # (5%), Producto (35%), Unid. (15%), Precio (15%), Ventas (10%), Ingresos (20%)
@@ -1830,7 +1829,7 @@ class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
                 0.10 * content_width, # Ventas
                 0.25 * content_width  # Total Ingresos (más espacio)
             ]
-            
+
             table = Table(data, colWidths=col_widths, repeatRows=1) # repeatRows=1 para repetir encabezado en nueva página
             table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
@@ -1852,7 +1851,7 @@ class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
                 # ('WORDWRAP', (1, 0), (1, -1), 'CJK') # Usar CJK para mejor word wrap si hay caracteres especiales
                                                     # O simplemente no especificar y dejar que ReportLab maneje
             ]))
-            
+
             # Usar wrapOn para obtener el ancho y alto reales que la tabla ocupará
             table_width_actual, table_height_actual = table.wrapOn(p, content_width, current_y - margin_bottom)
 
@@ -1860,7 +1859,7 @@ class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
             # Se resta la altura de la tabla desde la posición Y actual
             # Esto asegura que la tabla comience DESPUÉS del texto "DETALLE DE PRODUCTOS:"
             table_draw_y = current_y - table_height_actual
-            
+
             # Si la tabla es muy grande y se sale del margen inferior, la movemos a una nueva página
             if table_draw_y < margin_bottom:
                 p.showPage() # Nueva página
@@ -1869,7 +1868,7 @@ class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
                 # Por simplicidad aquí, no lo redibujo, pero para reportes multi-página es crucial
                 # O mejor aún, usar el sistema de flujo de Platypus (Story) para manejo automático de páginas.
                 # Aquí solo ajustamos el Y para la tabla en la nueva página:
-                table_draw_y = current_y - table_height_actual 
+                table_draw_y = current_y - table_height_actual
                 # Podrías necesitar redibujar el título "DETALLE DE PRODUCTOS" también si va a una nueva página.
 
 
@@ -1880,29 +1879,29 @@ class ProductosMasVendidosPDFView(LoginRequiredMixin, View):
             p.setFont("Helvetica", 8)
             p.line(margin_left, margin_bottom + 15, width - margin_right, margin_bottom + 15) # Línea arriba del footer
             p.drawString(width - margin_right - p.stringWidth("Página 1 de 1", "Helvetica", 8), margin_bottom, f"Página 1 de 1") # Alineado a la derecha
-            p.drawString(margin_left, margin_bottom, "The Black System - Todos los derechos reservados")
+            p.drawString(margin_left, margin_bottom, "Doña Clara C.A. - Todos los derechos reservados")
 
             p.showPage()
             p.save()
             buffer.seek(0)
-            
+
             response = HttpResponse(buffer, content_type='application/pdf')
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             response['Content-Disposition'] = f'attachment; filename="Productos_Mas_Vendidos_{timestamp}.pdf"'
             return response
-            
+
         except Exception as e:
             messages.error(request, f'Error al generar el reporte PDF: {str(e)}')
             # Considera redirigir a una página más genérica o a la página anterior
             # si 'productos_mas_vendidos' no existe o no es el lugar correcto.
             return redirect(request.META.get('HTTP_REFERER', reverse_lazy('black_invoices:inicio')))
-        
+
 class TasaCambioListView(EmpleadoRolMixin, ListView):
     model = TasaCambio
     template_name = 'black_invoices/configuracion/tasa_cambio_list.html'
     context_object_name = 'tasas'
     roles_permitidos = ['Administrador', 'Supervisor']
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Gestión de Tasa de Cambio'
@@ -1915,13 +1914,13 @@ class TasaCambioCreateView(EmpleadoRolMixin, CreateView):
     fields = ['fecha', 'tasa_usd_ves', 'activa']
     success_url = reverse_lazy('black_invoices:tasa_cambio_list')
     roles_permitidos = ['Administrador', 'Supervisor']
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Agregar Tasa de Cambio'
         context['boton'] = 'Guardar'
         return context
-    
+
     def form_valid(self, form):
         messages.success(self.request, 'Tasa de cambio creada exitosamente')
         return super().form_valid(form)
@@ -1932,13 +1931,13 @@ class TasaCambioUpdateView(EmpleadoRolMixin, UpdateView):
     fields = ['fecha', 'tasa_usd_ves', 'activo']
     success_url = reverse_lazy('black_invoices:tasa_cambio_list')
     roles_permitidos = ['Administrador', 'Supervisor']
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Editar Tasa de Cambio'
         context['boton'] = 'Actualizar'
         return context
-    
+
     def form_valid(self, form):
         messages.success(self.request, 'Tasa de cambio actualizada exitosamente')
         return super().form_valid(form)
@@ -1950,27 +1949,27 @@ class TasaCambioManualView(EmpleadoRolMixin, CreateView):
     fields = ['tasa_usd_ves']
     success_url = reverse_lazy('black_invoices:tasa_cambio_list')
     roles_permitidos = ['Administrador', 'Supervisor']
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Actualización Manual de Tasa'
         context['tasa_actual'] = TasaCambio.get_tasa_actual()
         context['boton'] = 'Actualizar Tasa'
         return context
-    
+
     def form_valid(self, form):
         from django.utils import timezone
         # Desactivar tasa anterior del día
         hoy = timezone.now().date()
         TasaCambio.objects.filter(fecha=hoy).update(activo=False)
-        
+
         # Crear nueva tasa
         form.instance.fecha = hoy
         form.instance.fuente = f'Manual - {self.request.user.empleado.nombre}'
         form.instance.activo = True
-        
+
         messages.success(
-            self.request, 
+            self.request,
             f'Tasa actualizada manualmente: 1 USD = {form.instance.tasa_usd_ves:,.4f} VES'
         )
         return super().form_valid(form)
@@ -1984,7 +1983,7 @@ from django.db.models import Q
 class ProductoSearchAPIView(View):
     def get(self, request):
         query = request.GET.get('q', '').strip()
-        
+
         # Buscar productos activos con stock
         if query and len(query) >= 1:
             # Búsqueda por query
@@ -1999,7 +1998,7 @@ class ProductoSearchAPIView(View):
                 activo=True,
                 stock__gt=0
             ).select_related('unidad_medida')[:10]
-        
+
         # Formatear datos para Select2
         data = []
         for p in productos:
@@ -2014,5 +2013,5 @@ class ProductoSearchAPIView(View):
                 'precio_formateado': f"${p.precio:,.2f}",
                 'stock_formateado': f"{p.stock:,.1f}"
             })
-        
+
         return JsonResponse({'results': data})

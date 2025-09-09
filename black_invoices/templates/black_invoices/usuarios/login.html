@@ -5,30 +5,106 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'css/usuarios/style.css' %}">
-    <title>Login</title>
+    <!-- FontAwesome para iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Login - Corporación Agrícola Doña Clara</title>
+    <link rel="icon" type="image/png" href="{% static 'img/logo2.png' %}">
 </head>
 <body>
     <div class="login-container">
         <div class="logo">
-            <img src="{% static 'img/logo2.png' %}" alt="The Black Bearings and Parts">
+            <img src="{% static 'img/logo2.png' %}" alt="Corporación Agrícola Doña Clara">
         </div>
+
         <form class="login-form" method="post">
             {% csrf_token %}
             <h2>Iniciar Sesión</h2>
-            <input type="text" name="username" placeholder="Usuario" required>
-            <input type="password" name="password" placeholder="Contraseña" required>
+            <p class="login-subtitle">Accede a tu cuenta del sistema</p>
 
-            <button type="submit">Ingresar</button>
+            <div class="input-group">
+                <input
+                    type="text"
+                    name="username"
+                    placeholder="Nombre de usuario"
+                    required
+                    autocomplete="username"
+                >
+                <i class="fas fa-user input-icon"></i>
+            </div>
+
+            <div class="input-group">
+                <input
+                    type="password"
+                    name="password"
+                    placeholder="Contraseña"
+                    required
+                    autocomplete="current-password"
+                >
+                <i class="fas fa-lock input-icon"></i>
+            </div>
+
+            <button type="submit" class="login-btn">
+                <i class="fas fa-sign-in-alt" style="margin-right: 8px;"></i>
+                Ingresar al Sistema
+            </button>
+
             {% if messages %}
             <div class="messages">
                 {% for message in messages %}
-                    <p class="{{ message.tags }}">{{ message }}</p>
+                    <p class="{{ message.tags }}">
+                        {% if message.tags == 'error' %}
+                            <i class="fas fa-exclamation-circle" style="margin-right: 8px;"></i>
+                        {% elif message.tags == 'success' %}
+                            <i class="fas fa-check-circle" style="margin-right: 8px;"></i>
+                        {% endif %}
+                        {{ message }}
+                    </p>
                 {% endfor %}
             </div>
             {% endif %}
         </form>
+
+        <!-- Opcional: Link para recuperar contraseña -->
+        <div class="forgot-password">
+            <a href="#"><i class="fas fa-question-circle"></i> ¿Olvidaste tu contraseña?</a>
+        </div>
+
+        <div class="login-footer">
+            <p><i class="fas fa-copyright"></i> {{ current_year|default:"2024" }} Corporación Agrícola Doña Clara</p>
+            <p><i class="fas fa-cogs"></i> Sistema de Gestión Empresarial</p>
+        </div>
     </div>
+
+    <script>
+        // Enfocar automáticamente el campo de usuario al cargar
+        document.addEventListener('DOMContentLoaded', function() {
+            const usernameInput = document.querySelector('input[name="username"]');
+            if (usernameInput) {
+                usernameInput.focus();
+            }
+        });
+
+        // Mostrar/ocultar contraseña
+        document.querySelector('.fa-lock').addEventListener('click', function() {
+            const passwordInput = this.previousElementSibling;
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+
+            // Cambiar icono
+            this.classList.toggle('fa-lock');
+            this.classList.toggle('fa-lock-open');
+        });
+
+        // Mejorar feedback visual en los inputs
+        document.querySelectorAll('.input-group input').forEach(input => {
+            input.addEventListener('focus', function() {
+                this.parentElement.classList.add('focused');
+            });
+
+            input.addEventListener('blur', function() {
+                this.parentElement.classList.remove('focused');
+            });
+        });
+    </script>
 </body>
 </html>
-
-

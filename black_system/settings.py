@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-&%iy(_8%sls4i)-j(s^u!ql#3sy9f@br=iaum0i_^hdxqi5+!f
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['corporaciondonaclara.pythonanywhere.com']
 
 
 # Application definition
@@ -131,25 +131,22 @@ BCV_API_URL = 'https://api.exchangerate-api.com/v4/latest/USD'
 BCV_API_TIMEOUT = 30
 
 # Configuración de archivos media
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+STATIC_URL = '/static/'
+#MEDIA_ROOT = BASE_DIR / 's'
 
 # Logging
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
+        'console': {
+            'class': 'logging.StreamHandler',
         },
     },
     'loggers': {
-        'black_invoices.management.commands': {
-            'handlers': ['file'],
+        'django': {
+            'handlers': ['console'],
             'level': 'INFO',
-            'propagate': True,
         },
     },
 }
