@@ -133,7 +133,7 @@
 
 <script>
     // Para el botón de IMPRESIÓN
-    const imageUrl = "{% static 'img/the_black.jpeg' %}"; 
+    const imageUrl = "{% static 'img/logo2.png' %}"; 
 
     // Para el botón PDF, USAREMOS BASE64.
     // ¡¡¡REEMPLAZA ESTA CADENA CON LA CADENA BASE64 REAL DE TU IMAGEN 'the_black.jpeg'!!!
@@ -144,10 +144,10 @@
         var tituloReporteArchivo = 'Catálogo de Productos - ' + fechaActual;
         
         // --- INICIO: Definiciones para el Membrete (reutilizadas) ---
-        var nombreEmpresa = 'INDUSTRIA & HERRAMIENTA EL NEGRITO, C.A.';
-        var rifEmpresa = 'RIF: J-406050717';
-        var direccionEmpresa = 'CR 10 ENTRE CALLES 4 Y 5 EDIF DOÑA EDITH PISO 1 OF 2 BARRIO MATURIN GUANARE PORTUGUESA';
-        var telefonosEmpresa = 'Teléfonos: 0257-5143082 / 0257-5143082';
+        var nombreEmpresa = 'CORPORACION AGRICOLA DOÑA CLARA, C.A.';
+        var rifEmpresa = 'RIF: J-40723051-4';
+        var direccionEmpresa = 'Vda. 18 Casa Nro 48 Urb. Francisco de Miranda';
+        var telefonosEmpresa = 'Telf:0424-5439427 / 0424-5874882 / 0257-2532558';
         // Título específico que aparecerá en el cuerpo del reporte, debajo del membrete
         var tituloDelMembreteReporte = 'CATÁLOGO DE PRODUCTOS'; 
         // --- FIN: Definiciones para el Membrete ---
@@ -167,12 +167,12 @@
                     className: 'btn btn-secondary' // Consistencia con otras tablas
                 },
                 { // Botón PDF
-                    extend: 'pdf',
-                    text: '<i class="fas fa-file-pdf"></i> PDF',
+                    extend: 'print',
+                    text: '<i class="fas fa-print"></i> PDF',
                     className: 'btn btn-danger',
-                    title: tituloReporteArchivo, 
+                    title: ' ', 
                     exportOptions: {
-                        columns: ':visible:not(.no-export)',
+                        columns: [0, 1, 2, 3, 4],
                         stripHtml: true,
                         format: {
                             body: function ( data, row, column, node ) {
@@ -191,65 +191,35 @@
                             }
                         }
                     },
-                    customize: function(doc) {
-                        doc.pageMargins = [30, 100, 30, 60]; 
-                        doc.defaultStyle.fontSize = 9;
-                        doc.styles.tableHeader.fontSize = 10;
-                        doc.styles.tableHeader.fillColor = '#212529';
-                        doc.styles.tableHeader.color = 'white';
-                        doc.styles.tableHeader.alignment = 'center';
-                        doc.styles.tableBodyEven = {}; 
-                        doc.styles.tableBodyOdd = {};  
+                    customize: function(win) {
+                        $(win.document.body).css('font-size', '10pt');
+                        $(win.document.body).find('h1').remove();
 
-                        doc['header'] = (function(currentPage, pageCount, pageSize) {
-                            return {
-                                columns: [
-                                    (imageBase64 && imageBase64 !== "TU_LARGA_CADENA_BASE64_DE_THE_BLACK.JPEG_AQUI" ? 
-                                        { image: imageBase64, width: 100, alignment: 'left', margin: [30, 20, 0, 0] } : 
-                                        {text: '', width: 100, margin: [30, 20, 0, 0]}),
-                                    {
-                                        alignment: 'right', margin: [0, 20, 30, 0],
-                                        stack: [
-                                            { text: nombreEmpresa, bold: true, fontSize: 13, color: '#333333' },
-                                            { text: rifEmpresa, fontSize: 8, color: '#333333' },
-                                            { text: direccionEmpresa, fontSize: 8, color: '#333333', margin: [0, 2, 0, 0] },
-                                            { text: telefonosEmpresa, fontSize: 8, color: '#333333' }
-                                        ]
-                                    }
-                                ]
-                            };
-                        });
+                        var membreteHTML = `
+                            <div style="margin-bottom: 20px; overflow: auto; padding: 0 20px;">
+                                ${imageUrl ? `<div style="float: left; width: 25%;"><img src="${imageUrl}" style="width: 150px; height: auto;" alt="Logo"></div>` : '<div style="float: left; width: 25%;"></div>'}
+                                <div style="float: right; width: ${imageUrl ? '75%' : '100%'}; text-align: right;">
+                                    <h3 style="margin:0; font-size: 14px;">${nombreEmpresa}</h3>
+                                    <p style="margin:0; font-size: 9px;">${rifEmpresa}</p>
+                                    <p style="margin:0; font-size: 9px;">${direccionEmpresa}</p>
+                                    <p style="margin:0; font-size: 9px;">${telefonosEmpresa}</p>
+                                </div>
+                            </div>
+                            <div style="clear: both;"></div>
+                            <h4 style="text-align: center; font-size: 12px; margin-top: 10px; margin-bottom: 15px;">The Black System - ${tituloDelMembreteReporte}</h4>
+                        `;
+
+                        $(win.document.body).prepend(membreteHTML);
                         
-                        doc.content.splice(0, 0, { 
-                            text: 'The Black System - ' + tituloDelMembreteReporte,
-                            fontSize: 12, bold: true, alignment: 'center', margin: [0, 0, 0, 15]
-                        });
+                        $(win.document.body).find('table')
+                            .addClass('compact')
+                            .css('font-size', 'inherit');
 
-                        var tableNode = null;
-                        for (var i = 0; i < doc.content.length; i++) {
-                            if (doc.content[i].table) {
-                                tableNode = doc.content[i];
-                                break;
-                            }
-                        }
-
-                        if (tableNode) {
-                            // Para 6 columnas: #, Nombre, Precio, Stock, Estado, Última Actualización
-                            tableNode.table.widths = ['auto', '*', '15%', '10%', '10%', '20%'];
-                            // '#' auto, Nombre toma el espacio mayor '*', Última actualización un poco más de espacio.
-                            // Precio, Stock, Estado con porcentajes más pequeños. Ajusta según necesidad.
-                        } else {
-                            console.error("No se encontró la tabla principal en doc.content para aplicar anchos (Productos).");
-                        }
-
-                        doc['footer'] = function(page, pages) {
-                            return {
-                                columns: [
-                                    { alignment: 'left', text: ['Creado el: ', { text: fechaActual }], margin: [30, 0, 0, 0] },
-                                    { alignment: 'right', text: ['Página ', { text: page.toString() }, ' de ', { text: pages.toString() }], margin: [0, 0, 30, 0] }
-                                ]
-                            };
-                        };
+                        $(win.document.body).append(
+                            '<div style="text-align: center; margin-top: 20px; font-size: 8pt;">' +
+                            '<p>Creado el: ' + fechaActual + '</p>' +
+                            '</div>'
+                        );
                     }
                 },
                 { // Botón Excel
@@ -279,7 +249,7 @@
                     className: 'btn btn-dark', 
                     title: ' ', 
                     exportOptions: {
-                        columns: [0, 1, 2, 3, 4, 5], 
+                        columns: [0, 1, 2, 3, 4], 
                         format: {
                             body: function ( data, row, column, node ) {
                                 if (column === 3 || column === 4) { // Stock y Estado

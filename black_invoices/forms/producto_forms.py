@@ -4,8 +4,12 @@ from ..models import Producto, UnidadMedida
 class ProductoForm(forms.ModelForm):
     class Meta:
         model = Producto
-        fields = ['nombre', 'descripcion', 'unidad_medida', 'precio_compra', 'precio', 'stock', 'activo']
+        fields = ['sku', 'nombre', 'descripcion', 'unidad_medida', 'precio_compra', 'precio', 'stock', 'activo']
         widgets = {
+            'sku': forms.TextInput(attrs={
+                'class': 'form-control', 
+                'placeholder': 'Código único del producto'
+            }),
             'nombre': forms.TextInput(attrs={
                 'class': 'form-control', 
                 'placeholder': 'Nombre del producto'
@@ -42,6 +46,7 @@ class ProductoForm(forms.ModelForm):
         }
         
         labels = {
+            'sku': 'SKU/Código',
             'precio_compra': 'Precio de Compra (USD)',
             'precio': 'Precio de Venta (USD)',
             'unidad_medida': 'Unidad de Medida',
