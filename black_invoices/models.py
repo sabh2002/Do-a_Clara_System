@@ -1117,7 +1117,7 @@ class ConfiguracionSistema(models.Model):
     )
     
     telefono_empresa = models.CharField(
-        max_length=20,
+        max_length=60,
         verbose_name="Teléfono"
     )
     

@@ -11,7 +11,6 @@ from django.views import View
 from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DetailView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-
 from black_invoices.forms.user_profile_form import UserProfileForm
 from .models import *
 from .forms.producto_forms import ProductoForm
@@ -801,6 +800,7 @@ class VentaListView(LoginRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['titulo'] = 'Lista de Ventas'
         context['create_url'] = reverse_lazy('black_invoices:venta_create')
+        
         return context
 
 class VentasPendientesView(EmpleadoRolMixin, ListView):
@@ -1310,19 +1310,23 @@ class FacturaPDFView(LoginRequiredMixin, View):
         # --- Membrete y Logo ---
         logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
         if os.path.exists(logo_path):
-            # Ajustado: posición X=40, Y=height-120, tamaño más apropiado
-            p.drawImage(logo_path, -40, height - 140, width=290, height=120, preserveAspectRatio=True, mask='auto')
+            # Logo con tamaño personalizado ya ajustado
+            p.drawImage(logo_path, - 40, height - 140, width=290, height=120, preserveAspectRatio=True, mask='auto')
         
         # Obtener información de la empresa desde configuración
         config = ConfiguracionSistema.get_config()
         
-        # Nombre de la empresa - ajustado para alinearse con el logo
+        # Obtener tasa de cambio actual
+        tasa_actual = TasaCambio.get_tasa_actual()
+        tasa_usd_ves = tasa_actual.tasa_usd_ves if tasa_actual else Decimal('1.0')
+        
+        # Nombre de la empresa
         p.setFont("Helvetica-Bold", 12)
         p.drawString(180, height - 50, config.nombre_empresa)
         
         # RIF
         p.setFont("Helvetica-Bold", 11)
-        p.drawString(180, height - 65, f"RIF: J-40723051-4")
+        p.drawString(180, height - 65, f"RIF: {config.rif_empresa}")
         
         # Dirección y teléfonos
         p.setFont("Helvetica", 10)
@@ -1332,7 +1336,7 @@ class FacturaPDFView(LoginRequiredMixin, View):
 
         # --- Datos generales ---
         p.setFont("Helvetica-Bold", 13)
-        p.drawString(50, height - 140, f"FACTURA FISCAL Nº: {factura.id:04d}")  # Ajustado Y para dar espacio al logo
+        p.drawString(50, height - 140, f"FACTURA FISCAL Nº: {factura.numero_factura:04d}")
         p.setFont("Helvetica", 10)
         fecha_impresion = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
         p.drawString(400, height - 140, f"Fecha impresión: {fecha_impresion}")
@@ -1353,30 +1357,29 @@ class FacturaPDFView(LoginRequiredMixin, View):
 
         # --- Tabla de productos ---
         detalles = factura.detallefactura_set.all()
-        data = [["#", "Código", "Producto", "Cant.", "Garantía", "Precio", "Desc.", "Total"]]
+        data = [["#", "Código", "Producto", "Cant.", "Garantía", "Precio", "Precio Bs", "Total"]]
         
         for idx, detalle in enumerate(detalles, 1):
-            codigo = str(detalle.producto.id)  # Mostrar el id del producto
+            codigo = str(detalle.producto.id)
+            precio_bs = detalle.producto.precio * tasa_usd_ves
+            total_bs = detalle.sub_total * tasa_usd_ves
+            
             data.append([
                 str(idx),
                 codigo,
                 detalle.producto.nombre,
                 str(detalle.cantidad),
-                "Sí",  # Presentación (añadido según imagen)
-                f"{detalle.producto.precio:,.2f}",
-                "0,00",  # Descuento
-                f"{detalle.sub_total:,.2f}"
+                "Sí",  # Garantía
+                f"${detalle.producto.precio:,.2f}",
+                f"{precio_bs:,.2f}",  # Precio en Bs
+                f"${detalle.sub_total:,.2f}"
             ])
         
-        # Añadir solo una fila vacía para mantener el espacio
-        if len(data) < 3:  # Si solo tenemos el encabezado y un producto
-            data.append(["", "", "", "", "", "", "", ""])  # Solo una fila vacía
+        # Añadir fila de totales (SIN filas vacías adicionales)
+        data.append(["", "", "", "", "", "", "TOTAL", f"${factura.total_fac:,.2f}"])
         
-        # Añadir fila de totales
-        data.append(["", "", "", "", "", "", "TOTAL", f"{factura.total_fac:,.2f}"])
-        
-        # Crear tabla con 8 columnas (añadimos Presen.)
-        table = Table(data, colWidths=[25, 60, 160, 40, 50, 60, 50, 60])
+        # Crear tabla con 8 columnas
+        table = Table(data, colWidths=[25, 60, 140, 40, 50, 60, 60, 60])
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
@@ -1388,29 +1391,41 @@ class FacturaPDFView(LoginRequiredMixin, View):
             ('LINEABOVE', (6, -1), (7, -1), 0.5, colors.black),  # Línea solo arriba de "TOTAL" y su valor
             ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('ALIGN', (3, 1), (7, -1), 'RIGHT'),  # Alinear a la derecha desde Cant. hasta Total
+            ('ALIGN', (6, 1), (6, -2), 'RIGHT'),  # Precio Bs alineado a la derecha
             ('FONTNAME', (6, -1), (7, -1), 'Helvetica-Bold'),  # Negrita para "TOTAL" y su valor
         ]))
         
         table.wrapOn(p, width, height)
-        table.drawOn(p, 40, height - 340 - 20 * min(len(data), 6))  # Ajustado para logo más grande
+        table.drawOn(p, 40, height - 340 - 20 * min(len(data), 6))
 
-        # --- Sección de descuentos (como en la imagen 2) ---
+        # --- Sección de totales con ambas monedas ---
         p.setFont("Helvetica", 8)
-        p.drawString(430, 130, "DESC. POR PRODUCTOS")
-        p.drawString(550, 130, "0,00 BS")
-        p.drawString(430, 120, "DESC. (30.00)")
-        p.drawString(550, 120, "0,00 BS")
         
-        # Línea horizontal debajo de descuentos
-        p.line(430, 115, 580, 115)
+        # Calcular totales en Bs
+        subtotal_bs = factura.subtotal * tasa_usd_ves
+        iva_bs = factura.iva * tasa_usd_ves
+        total_bs = factura.total_fac * tasa_usd_ves
+        
+        # Subtotal
+        p.drawString(430, 140, "SUBTOTAL")
+        p.drawString(500, 140, f"${factura.subtotal:,.2f}")
+        p.drawString(550, 140, f"{subtotal_bs:,.2f} Bs")
+        
+        # IVA
+        p.drawString(430, 130, f"IVA ({config.porcentaje_iva}%)")
+        p.drawString(500, 130, f"${factura.iva:,.2f}")
+        p.drawString(550, 130, f"{iva_bs:,.2f} Bs")
+        
+        # Línea horizontal
+        p.line(430, 125, 580, 125)
         
         # Total general
         p.setFont("Helvetica-Bold", 9)
-        p.drawString(430, 100, "TOTAL")
-        p.drawString(550, 100, f"{factura.total_fac:,.2f} BS")
+        p.drawString(430, 110, "TOTAL")
+        p.drawString(500, 110, f"${factura.total_fac:,.2f}")
+        p.drawString(550, 110, f"{total_bs:,.2f} Bs")
 
         # --- Nota y pie de página ---
-        # Nota completa con saltos de línea adecuados
         p.setFont("Helvetica", 8)
         nota = "NO SE ACEPTAN PAGOS DE DIVISAS EN EFECTIVO HECHOS AL ASESOR DE VENTA NI AL SUPERVISOR, ASÍ COMO TAMPOCO BS EN EFECTIVO, PAGO MÓVIL O TRANSFERENCIAS A LAS CUENTAS PERSONALES DEL ASESOR O DEL SUPERVISOR. SOLO SE RECONOCERÁN LOS PAGOS HECHOS A LAS CUENTAS DE LA EMPRESA."
         
@@ -1423,7 +1438,7 @@ class FacturaPDFView(LoginRequiredMixin, View):
         for i, linea in enumerate(nota_lineas):
             p.drawString(40, 80 - (i * 10), linea)
         
-        # Paginación (ajustada para no sobreponerse)
+        # Paginación
         p.drawString(470, 30, f"Página 1 de 1")
         
         # Footer
@@ -1451,11 +1466,15 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         # --- Membrete y Logo ---
         logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
         if os.path.exists(logo_path):
-            # Ajustado: posición X=40, Y=height-120, tamaño más apropiado
+            # Logo con tamaño personalizado ya ajustado
             p.drawImage(logo_path, - 40, height - 140, width=290, height=120, preserveAspectRatio=True, mask='auto')
         
         # Obtener información de la empresa desde configuración
         config = ConfiguracionSistema.get_config()
+        
+        # Obtener tasa de cambio actual
+        tasa_actual = TasaCambio.get_tasa_actual()
+        tasa_usd_ves = tasa_actual.tasa_usd_ves if tasa_actual else Decimal('1.0')
         
         # Información de empresa
         p.setFont("Helvetica-Bold", 12)
@@ -1469,7 +1488,7 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
 
         # --- Datos generales ---
         p.setFont("Helvetica-Bold", 13)
-        p.drawString(50, height - 140, f"NOTA DE ENTREGA Nº:{nota.numero_nota:04d} ")  # Ajustado Y para dar espacio al logo
+        p.drawString(50, height - 140, f"NOTA DE ENTREGA Nº: {nota.numero_nota:04d}")
         p.setFont("Helvetica", 10)
         fecha_impresion = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
         p.drawString(400, height - 140, f"Fecha impresión: {fecha_impresion}")
@@ -1488,11 +1507,14 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
 
         # --- Tabla de productos ---
         detalles = nota.detalles_nota.all()
-        data = [["#", "Código", "Producto", "Cant.", "Unidad", "Precio", "Total"]]
+        data = [["#", "Código", "Producto", "Cant.", "Unidad", "Precio", "Precio Bs", "Total"]]
         
         for idx, detalle in enumerate(detalles, 1):
             codigo = detalle.producto.sku or str(detalle.producto.id)
             unidad = detalle.producto.unidad_medida.abreviatura if detalle.producto.unidad_medida else "UN"
+            precio_bs = detalle.precio_unitario * tasa_usd_ves
+            total_bs = detalle.subtotal_linea * tasa_usd_ves
+            
             data.append([
                 str(idx),
                 codigo,
@@ -1500,14 +1522,15 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
                 str(detalle.cantidad),
                 unidad,
                 f"${detalle.precio_unitario:,.2f}",
+                f"{precio_bs:,.2f}",  # Precio en Bs
                 f"${detalle.subtotal_linea:,.2f}"
             ])
         
         # Fila de totales
-        data.append(["", "", "", "", "", "TOTAL", f"${nota.total:,.2f}"])
+        data.append(["", "", "", "", "", "", "TOTAL", f"${nota.total:,.2f}"])
         
         # Crear tabla
-        table = Table(data, colWidths=[25, 60, 180, 40, 40, 60, 60])
+        table = Table(data, colWidths=[25, 60, 160, 40, 40, 60, 60, 60])
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
@@ -1516,19 +1539,50 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
             ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
             ('GRID', (0, 0), (-1, -2), 0.5, colors.black),
-            ('LINEABOVE', (5, -1), (6, -1), 0.5, colors.black),
+            ('LINEABOVE', (6, -1), (7, -1), 0.5, colors.black),
             ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('ALIGN', (3, 1), (6, -1), 'RIGHT'),
-            ('FONTNAME', (5, -1), (6, -1), 'Helvetica-Bold'),
+            ('ALIGN', (3, 1), (7, -1), 'RIGHT'),
+            ('ALIGN', (6, 1), (6, -2), 'RIGHT'),  # Precio Bs alineado a la derecha
+            ('FONTNAME', (6, -1), (7, -1), 'Helvetica-Bold'),
         ]))
         
         table.wrapOn(p, width, height)
-        table.drawOn(p, 40, height - 360)  # Ajustado para nuevo espacio
+        table.drawOn(p, 40, height - 360)
+
+        # --- Totales con ambas monedas ---
+        p.setFont("Helvetica", 8)
+        
+        # Calcular totales en Bs
+        subtotal_bs = nota.subtotal * tasa_usd_ves
+        iva_bs = nota.iva * tasa_usd_ves
+        total_bs = nota.total * tasa_usd_ves
+        
+        # Subtotal
+        p.drawString(430, 140, "SUBTOTAL")
+        p.drawString(500, 140, f"${nota.subtotal:,.2f}")
+        p.drawString(550, 140, f"{subtotal_bs:,.2f} Bs")
+        
+        # IVA
+        p.drawString(430, 130, f"IVA ({config.porcentaje_iva}%)")
+        p.drawString(500, 130, f"${nota.iva:,.2f}")
+        p.drawString(550, 130, f"{iva_bs:,.2f} Bs")
+        
+        # Línea horizontal
+        p.line(430, 125, 580, 125)
+        
+        # Total general
+        p.setFont("Helvetica-Bold", 9)
+        p.drawString(430, 110, "TOTAL")
+        p.drawString(500, 110, f"${nota.total:,.2f}")
+        p.drawString(550, 110, f"{total_bs:,.2f} Bs")
 
         # --- Nota importante ---
         p.setFont("Helvetica", 8)
         nota_texto = "NOTA IMPORTANTE: Este documento es una NOTA DE ENTREGA. La Factura Fiscal se generará al completar el pago."
-        p.drawString(40, 100, nota_texto)
+        p.drawString(40, 90, nota_texto)
+
+        # --- Paginación (AGREGADA) ---
+        p.drawString(470, 30, f"Página 1 de 1")
 
         # Footer
         p.setFont("Helvetica", 8)
@@ -1540,7 +1594,7 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="Nota_Entrega_{nota.numero_nota}.pdf"'
-        return response     
+        return response    
     
 from django.http import HttpResponse, JsonResponse
 from django.core.management import call_command
