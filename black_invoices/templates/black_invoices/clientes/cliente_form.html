@@ -20,17 +20,32 @@
             {% endif %}
             
             <div class="row">
-                <!-- Cédula -->
-                <div class="col-md-6">
+                <!-- Tipo de Documento -->
+                <div class="col-md-3">
                     <div class="form-group">
-                        <label for="{{ form.cedula.id_for_label }}">{{ form.cedula.label }} <span class="text-danger">*</span></label>
-                        {{ form.cedula }}
-                        {% if form.cedula.help_text %}
-                            <small class="form-text text-muted">{{ form.cedula.help_text }}</small>
-                        {% endif %}
-                        {% if form.cedula.errors %}
+                        <label for="{{ form.tipo_documento.id_for_label }}">{{ form.tipo_documento.label }} <span class="text-danger">*</span></label>
+                        {{ form.tipo_documento }}
+                        {% if form.tipo_documento.errors %}
                             <div class="text-danger">
-                                {% for error in form.cedula.errors %}
+                                {% for error in form.tipo_documento.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Número de Documento -->
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="{{ form.numero_documento.id_for_label }}">{{ form.numero_documento.label }} <span class="text-danger">*</span></label>
+                        {{ form.numero_documento }}
+                        {% if form.numero_documento.help_text %}
+                            <small class="form-text text-muted">{{ form.numero_documento.help_text }}</small>
+                        {% endif %}
+                        {% if form.numero_documento.errors %}
+                            <div class="text-danger">
+                                {% for error in form.numero_documento.errors %}
                                     <small>{{ error }}</small>
                                 {% endfor %}
                             </div>
@@ -60,29 +75,14 @@
             </div>
             
             <div class="row">
-                <!-- Nombre -->
-                <div class="col-md-6">
+                <!-- Nombre Completo -->
+                <div class="col-md-12">
                     <div class="form-group">
-                        <label for="{{ form.nombre.id_for_label }}">{{ form.nombre.label }} <span class="text-danger">*</span></label>
-                        {{ form.nombre }}
-                        {% if form.nombre.errors %}
+                        <label for="{{ form.nombre_completo.id_for_label }}">{{ form.nombre_completo.label }} <span class="text-danger">*</span></label>
+                        {{ form.nombre_completo }}
+                        {% if form.nombre_completo.errors %}
                             <div class="text-danger">
-                                {% for error in form.nombre.errors %}
-                                    <small>{{ error }}</small>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-                
-                <!-- Apellido -->
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label for="{{ form.apellido.id_for_label }}">{{ form.apellido.label }} <span class="text-danger">*</span></label>
-                        {{ form.apellido }}
-                        {% if form.apellido.errors %}
-                            <div class="text-danger">
-                                {% for error in form.apellido.errors %}
+                                {% for error in form.nombre_completo.errors %}
                                     <small>{{ error }}</small>
                                 {% endfor %}
                             </div>
@@ -147,9 +147,12 @@
 <!-- Información sobre el formato de cédula -->
 <div class="card mt-3">
     <div class="card-body">
-        <h6><i class="fas fa-info-circle text-info"></i> Información sobre formatos:</h6>
+        <h6><i class="fas fa-info-circle text-info"></i> Información sobre tipos de documento:</h6>
         <ul class="mb-0">
-            <li><strong>Cédula:</strong> Debe comenzar con V (venezolano) o E (extranjero) seguido de 6 a 8 dígitos. Ejemplo: V12345678</li>
+            <li><strong>V - Venezolano:</strong> Cédula de identidad para ciudadanos venezolanos (6-8 dígitos)</li>
+            <li><strong>E - Extranjero:</strong> Cédula de identidad para ciudadanos extranjeros (6-8 dígitos)</li>
+            <li><strong>J - Jurídico:</strong> RIF para empresas privadas y organizaciones (8-9 dígitos)</li>
+            <li><strong>G - Gubernamental:</strong> RIF para instituciones gubernamentales (8-9 dígitos)</li>
             <li><strong>Teléfono:</strong> Seleccione el prefijo y escriba los 7 dígitos restantes</li>
             <li><strong>Email:</strong> Campo opcional, puede dejarlo vacío</li>
         </ul>
@@ -160,12 +163,21 @@
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // Validación en tiempo real de la cédula
-    $('#{{ form.cedula.id_for_label }}').on('input', function() {
-        var cedula = $(this).val().toUpperCase().replace('-', '');
-        var isValid = /^[VE]\d{6,8}$/.test(cedula);
+    // Validación en tiempo real del número de documento
+    $('#{{ form.numero_documento.id_for_label }}').on('input', function() {
+        var numero = $(this).val().replace(/\D/g, ''); // Solo números
+        $(this).val(numero); // Actualizar el valor sin caracteres no numéricos
         
-        if (cedula.length > 0) {
+        var tipo = $('#{{ form.tipo_documento.id_for_label }}').val();
+        var isValid = false;
+        
+        if (tipo === 'V' || tipo === 'E') {
+            isValid = numero.length >= 6 && numero.length <= 8;
+        } else if (tipo === 'J' || tipo === 'G') {
+            isValid = numero.length >= 8 && numero.length <= 9;
+        }
+        
+        if (numero.length > 0) {
             if (isValid) {
                 $(this).removeClass('is-invalid').addClass('is-valid');
             } else {
@@ -174,6 +186,32 @@ $(document).ready(function() {
         } else {
             $(this).removeClass('is-valid is-invalid');
         }
+    });
+    
+    // Revalidar número cuando cambia el tipo de documento
+    $('#{{ form.tipo_documento.id_for_label }}').on('change', function() {
+        $('#{{ form.numero_documento.id_for_label }}').trigger('input');
+        
+        var tipo = $(this).val();
+        var placeholder = '';
+        var maxLength = '';
+        var title = '';
+        
+        if (tipo === 'V' || tipo === 'E') {
+            placeholder = '12345678 (6-8 dígitos)';
+            maxLength = '8';
+            title = 'Ingrese entre 6 y 8 dígitos';
+        } else if (tipo === 'J' || tipo === 'G') {
+            placeholder = '123456789 (8-9 dígitos)';
+            maxLength = '9';
+            title = 'Ingrese entre 8 y 9 dígitos';
+        }
+        
+        $('#{{ form.numero_documento.id_for_label }}').attr({
+            'placeholder': placeholder,
+            'maxlength': maxLength,
+            'title': title
+        });
     });
     
     // Validación en tiempo real del número de teléfono
@@ -190,13 +228,8 @@ $(document).ready(function() {
         }
     });
     
-    // Formatear cédula automáticamente
-    $('#{{ form.cedula.id_for_label }}').on('blur', function() {
-        var cedula = $(this).val().toUpperCase().replace('-', '');
-        if (cedula.length > 1 && /^[VE]\d+$/.test(cedula)) {
-            $(this).val(cedula); // Mantener sin guión para simplificar
-        }
-    });
+    // Inicializar placeholder al cargar la página
+    $('#{{ form.tipo_documento.id_for_label }}').trigger('change');
 });
 </script>
 {% endblock %}

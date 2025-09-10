@@ -19,8 +19,8 @@
         <!-- Filtros de búsqueda -->
         <div class="row mb-4">
             <div class="col-md-4">
-                <label for="filtro_cedula">Buscar por Cédula:</label>
-                <input type="text" class="form-control" id="filtro_cedula" placeholder="V12345678 o E12345678">
+                <label for="filtro_cedula">Buscar por Cédula/RIF:</label>
+                <input type="text" class="form-control" id="filtro_cedula" placeholder="V12345678, E12345678, J12345678, G12345678">
             </div>
             <div class="col-md-4">
                 <label for="filtro_nombre">Buscar por Nombre:</label>
@@ -37,7 +37,7 @@
         <table id="tabla-clientes" class="table table-bordered table-striped">
             <thead>
                 <tr>
-                    <th>Cédula</th>
+                    <th>Cédula/RIF</th>
                     <th>Nombre Completo</th>
                     <th>Teléfono</th>
                     <th>Email</th>
@@ -70,6 +70,11 @@
                             <a href="{% url 'black_invoices:cliente_update' cliente.id %}"
                                class="btn btn-warning btn-sm" title="Editar">
                                 <i class="fas fa-edit"></i>
+                            </a>
+                            <a href="{% url 'black_invoices:cliente_delete' cliente.id %}"
+                               class="btn btn-danger btn-sm" title="Eliminar"
+                               onclick="return confirm('¿Está seguro de que desea eliminar este cliente? Esta acción también eliminará todas sus facturas asociadas.')">
+                                <i class="fas fa-trash"></i>
                             </a>
                         </div>
                     </td>
@@ -108,9 +113,9 @@
                 </h3>
             </div>
             <div class="card-body">
-                <p><strong>Con email:</strong>
-                    {{ clientes|length }} <!-- Necesitaremos calcular esto en la vista -->
-                </p>
+                <!-- <p><strong>Con email:</strong>
+                    {{ clientes|length }} 
+                </p> -->
                 <p><strong>Registrados hoy:</strong>
                     {{ clientes|length }} <!-- Necesitaremos calcular esto en la vista -->
                 </p>

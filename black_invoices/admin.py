@@ -13,18 +13,21 @@ class EmpleadoAdmin(admin.ModelAdmin):
 @admin.register(Cliente)
 class ClienteAdmin(admin.ModelAdmin):
     list_display = ('cedula_formateada', 'nombre_completo', 'telefono', 'email', 'fecha_registro')
-    list_filter = ('fecha_registro', 'fecha_actualizacion')
-    search_fields = ('cedula', 'nombre', 'apellido', 'telefono')
-    ordering = ('apellido', 'nombre')
+    list_filter = ('tipo_documento', 'fecha_registro', 'fecha_actualizacion')
+    search_fields = ('cedula', 'numero_documento', 'nombre_completo', 'telefono')
+    ordering = ('nombre_completo',)
     date_hierarchy = 'fecha_registro'
     
     # Campos de solo lectura
-    readonly_fields = ('fecha_registro', 'fecha_actualizacion')
+    readonly_fields = ('cedula', 'fecha_registro', 'fecha_actualizacion')
     
     # Organización de campos en el formulario de admin
     fieldsets = (
+        ('Información del Documento', {
+            'fields': ('tipo_documento', 'numero_documento', 'cedula')
+        }),
         ('Información Personal', {
-            'fields': ('cedula', 'nombre', 'apellido')
+            'fields': ('nombre_completo',)
         }),
         ('Información de Contacto', {
             'fields': ('telefono', 'email', 'direccion')
@@ -43,7 +46,7 @@ class ClienteAdmin(admin.ModelAdmin):
     def cedula_formateada(self, obj):
         """Mostrar cédula formateada en la lista"""
         return obj.cedula_formateada
-    cedula_formateada.short_description = 'Cédula'
+    cedula_formateada.short_description = 'Documento'
     
     # Acciones personalizadas
     actions = ['exportar_clientes_csv']
@@ -57,13 +60,12 @@ class ClienteAdmin(admin.ModelAdmin):
         response['Content-Disposition'] = 'attachment; filename="clientes.csv"'
         
         writer = csv.writer(response)
-        writer.writerow(['Cédula', 'Nombre', 'Apellido', 'Teléfono', 'Email', 'Dirección'])
+        writer.writerow(['Documento', 'Nombre Completo', 'Teléfono', 'Email', 'Dirección'])
         
         for cliente in queryset:
             writer.writerow([
                 cliente.cedula,
-                cliente.nombre,
-                cliente.apellido,
+                cliente.nombre_completo,
                 cliente.telefono,
                 cliente.email or 'No registrado',
                 cliente.direccion

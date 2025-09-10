@@ -8,6 +8,9 @@
             <a href="{% url 'black_invoices:cliente_update' cliente.id %}" class="btn btn-warning btn-sm">
                 <i class="fas fa-edit"></i> Editar
             </a>
+            <a href="{% url 'black_invoices:cliente_delete' cliente.id %}" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash"></i> Eliminar
+            </a>
             <a href="{% url 'black_invoices:cliente_list' %}" class="btn btn-secondary btn-sm">
                 <i class="fas fa-arrow-left"></i> Volver
             </a>
@@ -19,7 +22,7 @@
                 <h5>Información Personal</h5>
                 <dl class="row">
                     <dt class="col-sm-4">Nombre:</dt>
-                    <dd class="col-sm-8">{{ cliente.nombre }} {{ cliente.apellido }}</dd>
+                    <dd class="col-sm-8">{{ cliente.nombre_completo }}</dd>
                     
                     <dt class="col-sm-4">Email:</dt>
                     <dd class="col-sm-8">{{ cliente.email|default:"No registrado" }}</dd>

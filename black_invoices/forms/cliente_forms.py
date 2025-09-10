@@ -36,21 +36,21 @@ class ClienteForm(forms.ModelForm):
 
     class Meta:
         model = Cliente
-        fields = ['cedula', 'nombre', 'apellido', 'email', 'direccion']
+        fields = ['tipo_documento', 'numero_documento', 'nombre_completo', 'email', 'direccion']
         widgets = {
-            'cedula': forms.TextInput(attrs={
+            'tipo_documento': forms.Select(attrs={
                 'class': 'form-control',
-                'placeholder': 'V12345678 o E12345678',
-                'pattern': '^[VE]-?[0-9]{6,8}$',
-                'title': 'Formato: V12345678 o E12345678'
+                'id': 'tipo_documento'
             }),
-            'nombre': forms.TextInput(attrs={
+            'numero_documento': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'Nombre del cliente'
+                'placeholder': '12345678',
+                'pattern': '[0-9]{6,9}',
+                'title': 'Solo números, entre 6 y 9 dígitos'
             }),
-            'apellido': forms.TextInput(attrs={
+            'nombre_completo': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'Apellido del cliente'
+                'placeholder': 'Nombre completo del cliente o empresa'
             }),
             'email': forms.EmailInput(attrs={
                 'class': 'form-control',
@@ -79,34 +79,36 @@ class ClienteForm(forms.ModelForm):
         self.fields['email'].required = False
         self.fields['email'].help_text = "Campo opcional"
     
-    def clean_cedula(self):
-        """Validación personalizada para cédula"""
-        cedula = self.cleaned_data.get('cedula')
+    def clean_numero_documento(self):
+        """Validación personalizada para número de documento"""
+        numero = self.cleaned_data.get('numero_documento')
+        tipo = self.cleaned_data.get('tipo_documento')
         
-        if cedula:
-            # Normalizar: remover guiones y convertir a mayúsculas
-            cedula = cedula.replace('-', '').upper()
+        if numero:
+            # Limpiar el número
+            numero = numero.replace(' ', '').replace('-', '')
             
-            # Validaciones básicas
-            if not cedula.startswith(('V', 'E')):
-                raise ValidationError('La cédula debe comenzar con V o E')
+            if not numero.isdigit():
+                raise ValidationError('El número debe contener solo dígitos')
             
-            numero_parte = cedula[1:]
-            if not numero_parte.isdigit():
-                raise ValidationError('Después de V o E solo debe haber números')
+            # Validar longitud según el tipo
+            if tipo in ['V', 'E']:
+                if len(numero) < 6 or len(numero) > 8:
+                    raise ValidationError('Para cédulas V/E debe tener entre 6 y 8 dígitos')
+            elif tipo in ['J', 'G']:
+                if len(numero) < 8 or len(numero) > 9:
+                    raise ValidationError('Para RIF J/G debe tener entre 8 y 9 dígitos')
             
-            if len(numero_parte) < 6 or len(numero_parte) > 8:
-                raise ValidationError('La cédula debe tener entre 6 y 8 dígitos')
-            
-            # Verificar que no exista otra cédula igual (excepto si es edición)
-            existing = Cliente.objects.filter(cedula=cedula)
+            # Verificar que no exista otro cliente con la misma cédula completa
+            cedula_completa = f"{tipo}{numero}"
+            existing = Cliente.objects.filter(cedula=cedula_completa)
             if self.instance and self.instance.pk:
                 existing = existing.exclude(pk=self.instance.pk)
             
             if existing.exists():
-                raise ValidationError('Ya existe un cliente con esta cédula')
+                raise ValidationError('Ya existe un cliente con este documento')
         
-        return cedula
+        return numero
     
     def clean_numero_telefono(self):
         """Validación para el número de teléfono"""

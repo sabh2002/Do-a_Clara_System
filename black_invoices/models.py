@@ -20,21 +20,37 @@ class NivelAcceso(models.Model):
     
 
 class Cliente(models.Model):
-    # Validador para cédula venezolana (V o E seguido de 6-8 dígitos)
-    cedula_validator = RegexValidator(
-        regex=r'^[VE]-?\d{6,8}$',
-        message='La cédula debe tener el formato V12345678 o E12345678'
+    TIPO_DOCUMENTO_CHOICES = [
+        ('V', 'V - Venezolano'),
+        ('E', 'E - Extranjero'),
+        ('J', 'J - Jurídico'),
+        ('G', 'G - Gubernamental'),
+    ]
+    
+    # Campo separado para tipo de documento
+    tipo_documento = models.CharField(
+        max_length=1,
+        choices=TIPO_DOCUMENTO_CHOICES,
+        default='V',
+        verbose_name="Tipo de Documento"
     )
     
+    # Campo para el número sin el prefijo
+    numero_documento = models.CharField(
+        max_length=9,
+        verbose_name="Número de Documento",
+        help_text="Solo números, entre 6 y 9 dígitos"
+    )
+    
+    # Campo calculado para mostrar cédula completa
     cedula = models.CharField(
         max_length=12, 
         unique=True,
-        validators=[cedula_validator],
-        verbose_name="Cédula",
-        help_text="Formato: V12345678 o E12345678"
+        verbose_name="Cédula/RIF",
+        editable=False  # No editable directamente
     )
-    nombre = models.CharField(max_length=20, verbose_name="Nombre")
-    apellido = models.CharField(max_length=20, verbose_name='Apellido')
+    
+    nombre_completo = models.CharField(max_length=100, verbose_name="Nombre Completo")
     
     # Hacer email opcional y no único
     email = models.EmailField(
@@ -60,47 +76,45 @@ class Cliente(models.Model):
     class Meta:
         verbose_name = "Cliente"
         verbose_name_plural = "Clientes"
-        ordering = ['apellido', 'nombre']
+        ordering = ['nombre_completo']
 
     def __str__(self):
-        return f"{self.cedula} - {self.nombre} {self.apellido}"
+        return f"{self.cedula} - {self.nombre_completo}"
     
     def clean(self):
         """Validaciones personalizadas"""
         super().clean()
         
-        # Normalizar cédula (remover guiones y convertir a mayúsculas)
-        if self.cedula:
-            self.cedula = self.cedula.replace('-', '').upper()
+        # Validar número de documento
+        if self.numero_documento:
+            # Remover espacios y validar que solo tenga números
+            self.numero_documento = self.numero_documento.replace(' ', '').replace('-', '')
             
-            # Validar que tenga el formato correcto después de normalizar
-            if not self.cedula.startswith(('V', 'E')):
-                raise ValidationError({'cedula': 'La cédula debe comenzar con V o E'})
+            if not self.numero_documento.isdigit():
+                raise ValidationError({'numero_documento': 'El número de documento debe contener solo dígitos'})
             
-            # Validar que después de V o E solo haya números
-            numero_parte = self.cedula[1:]
-            if not numero_parte.isdigit():
-                raise ValidationError({'cedula': 'Después de V o E solo debe haber números'})
-            
-            # Validar longitud de la parte numérica
-            if len(numero_parte) < 6 or len(numero_parte) > 8:
-                raise ValidationError({'cedula': 'La cédula debe tener entre 6 y 8 dígitos después de V o E'})
+            # Validar longitud según el tipo
+            if self.tipo_documento in ['V', 'E']:
+                if len(self.numero_documento) < 6 or len(self.numero_documento) > 8:
+                    raise ValidationError({'numero_documento': 'Para cédulas V/E debe tener entre 6 y 8 dígitos'})
+            elif self.tipo_documento in ['J', 'G']:
+                if len(self.numero_documento) < 8 or len(self.numero_documento) > 9:
+                    raise ValidationError({'numero_documento': 'Para RIF J/G debe tener entre 8 y 9 dígitos'})
     
     def save(self, *args, **kwargs):
+        # Construir la cédula completa antes de guardar
+        if self.tipo_documento and self.numero_documento:
+            self.cedula = f"{self.tipo_documento}{self.numero_documento}"
+        
         self.full_clean()  # Ejecutar validaciones antes de guardar
         super().save(*args, **kwargs)
     
     @property
-    def nombre_completo(self):
-        """Retorna el nombre completo del cliente"""
-        return f"{self.nombre} {self.apellido}"
-    
-    @property
     def cedula_formateada(self):
         """Retorna la cédula con formato legible"""
-        if self.cedula and len(self.cedula) > 1:
-            return f"{self.cedula[0]}-{self.cedula[1:]}"
-        return self.cedula
+        if self.cedula:
+            return self.cedula
+        return f"{self.tipo_documento}{self.numero_documento}" if self.tipo_documento and self.numero_documento else ""
 
 class Producto(models.Model):
     # Constantes para validaciones
@@ -394,7 +408,7 @@ class Ventas(models.Model):
     )
     factura = models.OneToOneField(
         'Factura',
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         verbose_name="Factura",
         null=True,  # NUEVO
         blank=True
@@ -412,7 +426,7 @@ class Ventas(models.Model):
     monto_pagado = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Monto Pagado")
     nota_entrega = models.OneToOneField(
         'NotaEntrega',
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         verbose_name="Nota de Entrega",
         null=True,
         blank=True
@@ -739,7 +753,7 @@ class Factura(models.Model):
     
     cliente = models.ForeignKey(
         'Cliente',
-        on_delete=models.PROTECT,  # Protege contra eliminación
+        on_delete=models.CASCADE,  # Eliminación en cascada
         verbose_name="Cliente",
         related_name='facturas'  # Permite cliente.facturas.all()
     )
@@ -879,7 +893,7 @@ class Factura(models.Model):
 class DetalleFactura(models.Model):
     factura = models.ForeignKey(
         'Factura',
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         verbose_name="Factura"
     )
     tipo_factura = models.ForeignKey(
@@ -1229,7 +1243,7 @@ class NotaEntrega(models.Model):
     
     cliente = models.ForeignKey(
         'Cliente',
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         verbose_name="Cliente",
         related_name='notas_entrega'
     )

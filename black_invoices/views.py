@@ -213,6 +213,37 @@ class ClienteUpdateView(LoginRequiredMixin, UpdateView):
         )
         return super().form_valid(form)
 
+class ClienteDeleteView(EmpleadoRolMixin, DeleteView):
+    model = Cliente
+    template_name = 'black_invoices/clientes/cliente_delete.html'
+    success_url = reverse_lazy('black_invoices:cliente_list')
+    context_object_name = 'cliente'
+    roles_permitidos = ['Administrador']
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        cliente = self.get_object()
+        context['titulo'] = f'Eliminar Cliente: {cliente.nombre_completo}'
+        
+        # Obtener información de facturas relacionadas que se eliminarán
+        facturas = cliente.facturas.all()
+        context['facturas_a_eliminar'] = facturas
+        context['total_facturas'] = facturas.count()
+        context['total_monto'] = sum(f.total_fac for f in facturas)
+        
+        return context
+
+    def form_valid(self, form):
+        cliente = self.get_object()
+        nombre_cliente = cliente.nombre_completo
+        num_facturas = cliente.facturas.count()
+        
+        messages.success(
+            self.request,
+            f'Cliente {nombre_cliente} y {num_facturas} factura(s) relacionada(s) eliminado(s) exitosamente'
+        )
+        return super().form_valid(form)
+
     def form_invalid(self, form):
         messages.error(
             self.request,
@@ -1911,7 +1942,7 @@ class TasaCambioListView(EmpleadoRolMixin, ListView):
 class TasaCambioCreateView(EmpleadoRolMixin, CreateView):
     model = TasaCambio
     template_name = 'black_invoices/configuracion/tasa_cambio_form.html'
-    fields = ['fecha', 'tasa_usd_ves', 'activa']
+    fields = ['fecha', 'tasa_usd_ves', 'activo']
     success_url = reverse_lazy('black_invoices:tasa_cambio_list')
     roles_permitidos = ['Administrador', 'Supervisor']
 
@@ -1959,20 +1990,40 @@ class TasaCambioManualView(EmpleadoRolMixin, CreateView):
 
     def form_valid(self, form):
         from django.utils import timezone
-        # Desactivar tasa anterior del día
+        from django.db import transaction
+        
         hoy = timezone.now().date()
-        TasaCambio.objects.filter(fecha=hoy).update(activo=False)
-
-        # Crear nueva tasa
-        form.instance.fecha = hoy
-        form.instance.fuente = f'Manual - {self.request.user.empleado.nombre}'
-        form.instance.activo = True
-
-        messages.success(
-            self.request,
-            f'Tasa actualizada manualmente: 1 USD = {form.instance.tasa_usd_ves:,.4f} VES'
-        )
-        return super().form_valid(form)
+        
+        # Usar transacción para garantizar consistencia
+        with transaction.atomic():
+            # Verificar si ya existe una tasa para hoy
+            existing_tasa = TasaCambio.objects.filter(fecha=hoy).first()
+            
+            if existing_tasa:
+                # Si existe, actualizar los valores en lugar de crear nueva
+                existing_tasa.tasa_usd_ves = form.cleaned_data['tasa_usd_ves']
+                existing_tasa.fuente = f'Manual - {self.request.user.empleado.nombre}'
+                existing_tasa.activo = True
+                existing_tasa.save()
+                
+                messages.success(
+                    self.request,
+                    f'Tasa actualizada exitosamente: 1 USD = {existing_tasa.tasa_usd_ves:,.4f} VES'
+                )
+                # Retornar respuesta de redirección manualmente
+                from django.http import HttpResponseRedirect
+                return HttpResponseRedirect(self.success_url)
+            else:
+                # Si no existe, crear nueva
+                form.instance.fecha = hoy
+                form.instance.fuente = f'Manual - {self.request.user.empleado.nombre}'
+                form.instance.activo = True
+                
+                messages.success(
+                    self.request,
+                    f'Tasa creada exitosamente: 1 USD = {form.instance.tasa_usd_ves:,.4f} VES'
+                )
+                return super().form_valid(form)
 
 
 # En views.py - Agregar esta nueva vista

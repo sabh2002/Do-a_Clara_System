@@ -250,24 +250,27 @@
                 </li>
                 {% endif %}
                 {% endif %}
-                <li class="nav-item dropdown user-menu">
-                    <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown">
-                        <i class="fas fa-user"></i>
-                        <span class="d-none d-md-inline">{{ user.empleado.nombre }} {{ user.empleado.apellido }}</span>
+                <!-- MENÚ DE USUARIO MEJORADO -->
+                <li class="nav-header">USUARIO</li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link">
+                        <i class="nav-icon fas fa-user-circle text-info"></i>
+                        <p>
+                            {{ user.empleado.nombre }} {{ user.empleado.apellido }}
+                            <i class="right fas fa-angle-left"></i>
+                        </p>
                     </a>
-                    <ul class="dropdown-menu dropdown-menu-lg dropdown-menu-right">
-                        <!-- User image -->
-                        <li class="user-header bg-primary">
-                            <p>
-                                {{ user.empleado.nombre }} {{ user.empleado.apellido }}
-                                <small>{{ user.empleado.nivel_acceso.nombre }}</small>
-                            </p>
+                    <ul class="nav nav-treeview">
+                        <li class="nav-item">
+                            <a href="{% url 'black_invoices:perfil_usuario_editar' %}" class="nav-link">
+                                <i class="fas fa-user-edit nav-icon text-primary"></i>
+                                <p>Editar Perfil</p>
+                            </a>
                         </li>
-                        <!-- Menu Footer-->
-                        <li class="user-footer">
-                            <a href="{% url 'black_invoices:perfil_usuario_editar' %}" class="btn btn-default btn-flat">Perfil</a>
-                            <a href="{% url 'black_invoices:logout' %}" class="btn btn-default btn-flat float-right">
-                                <i class="fas fa-sign-out-alt mr-2"></i> Cerrar sesión
+                        <li class="nav-item">
+                            <a href="{% url 'black_invoices:logout' %}" class="nav-link">
+                                <i class="fas fa-sign-out-alt nav-icon text-danger"></i>
+                                <p>Cerrar Sesión</p>
                             </a>
                         </li>
                     </ul>

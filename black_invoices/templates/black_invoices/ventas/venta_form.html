@@ -32,7 +32,7 @@
                                     <select name="cliente" class="form-control select2" required>
                                         <option value="">------</option>
                                         {% for c in clientes %}
-                                            <option value="{{ c.id }}">{{ c.nombre }} {{ c.apellido }}</option>
+                                            <option value="{{ c.id }}">{{ c.nombre_completo }} {{ c.apellido }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
