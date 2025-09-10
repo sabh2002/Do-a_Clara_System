@@ -382,12 +382,54 @@ class Producto(models.Model):
         }
 class Empleado(models.Model):
 
-    user = models.OneToOneField(User, on_delete=models.CASCADE, verbose_name='Usuario')
-    nombre = models.CharField(max_length=20, verbose_name= "Nombre")
-    apellido = models.CharField(max_length=20, verbose_name='Apellido')
-    nivel_acceso = models.ForeignKey(NivelAcceso, on_delete=models.PROTECT)
-    fecha_contratacion = models.DateField(auto_now_add=True, verbose_name='Fecha de contratación')
-    activo =  models.BooleanField(default=True, verbose_name='Activo')
+    # Relación opcional con usuario - permite empleados sin acceso al sistema
+    user = models.OneToOneField(
+        User, 
+        on_delete=models.CASCADE, 
+        verbose_name='Usuario del Sistema',
+        null=True,
+        blank=True,
+        help_text="Usuario para acceso al sistema (opcional)"
+    )
+    
+    # Información básica del empleado
+    cedula = models.CharField(
+        max_length=12, 
+        unique=True,
+        verbose_name="Cédula",
+        help_text="Cédula de identidad del empleado"
+    )
+    nombre = models.CharField(max_length=50, verbose_name="Nombre")
+    apellido = models.CharField(max_length=50, verbose_name='Apellido')
+    email = models.EmailField(
+        max_length=254, 
+        blank=True, 
+        null=True,
+        verbose_name="Correo Electrónico"
+    )
+    telefono = models.CharField(
+        max_length=15, 
+        blank=True, 
+        null=True,
+        verbose_name="Teléfono"
+    )
+    direccion = models.TextField(
+        blank=True, 
+        null=True,
+        verbose_name="Dirección"
+    )
+    
+    # Información laboral
+    nivel_acceso = models.ForeignKey(
+        NivelAcceso, 
+        on_delete=models.PROTECT,
+        verbose_name="Nivel de Acceso"
+    )
+    fecha_contratacion = models.DateField(
+        auto_now_add=True, 
+        verbose_name='Fecha de Contratación'
+    )
+    activo = models.BooleanField(default=True, verbose_name='Activo')
 
 
     class Meta:
@@ -397,6 +439,38 @@ class Empleado(models.Model):
 
     def __str__(self):
         return f"{self.nombre} {self.apellido}"
+    
+    @property
+    def nombre_completo(self):
+        """Retorna el nombre completo del empleado"""
+        return f"{self.nombre} {self.apellido}"
+    
+    @property
+    def tiene_acceso_sistema(self):
+        """Retorna si el empleado tiene acceso al sistema"""
+        return self.user is not None
+    
+    def clean(self):
+        """Validaciones personalizadas"""
+        from django.core.exceptions import ValidationError
+        super().clean()
+        
+        # Validar formato de cédula (similar a clientes)
+        if self.cedula:
+            self.cedula = self.cedula.replace('-', '').upper()
+            if not self.cedula.startswith(('V', 'E')):
+                raise ValidationError({'cedula': 'La cédula debe comenzar con V o E'})
+            
+            numero_parte = self.cedula[1:]
+            if not numero_parte.isdigit():
+                raise ValidationError({'cedula': 'Después de V o E solo debe haber números'})
+            
+            if len(numero_parte) < 6 or len(numero_parte) > 8:
+                raise ValidationError({'cedula': 'La cédula debe tener entre 6 y 8 dígitos'})
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
     
     
     
@@ -793,7 +867,7 @@ class Factura(models.Model):
         ordering = ['-fecha_fac']  # Ordena por fecha descendente
     
     def __str__(self):
-        return f"Factura #{self.id} - Cliente: {self.cliente.nombre}"
+        return f"Factura #{self.id} - Cliente: {self.cliente.nombre_completo}"
     
     @property
     def total_venta(self):
@@ -1314,7 +1388,7 @@ class NotaEntrega(models.Model):
         ordering = ['-fecha_nota']
 
     def __str__(self):
-        return f"Nota #{self.numero_nota} - {self.cliente.nombre}"
+        return f"Nota #{self.numero_nota} - {self.cliente.nombre_completo}"
     
     @property
     def saldo_pendiente(self):

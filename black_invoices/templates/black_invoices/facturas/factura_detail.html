@@ -14,13 +14,13 @@
                 <p><strong>Número de Recibo:</strong> {{ factura.id }}</p>
                 <p><strong>Fecha de Emisión:</strong> {{ factura.fecha_fac|date:"d/m/Y H:i" }}</p>
                 <p><strong>Método de Pago:</strong> {{ factura.get_metodo_pag_display }}</p>
-                <p><strong>Vendedor:</strong> {{ factura.empleado.nombre }} {{ factura.empleado.apellido }}</p>
+                <p><strong>Vendedor:</strong> {{ factura.empleado.nombre_completo }}</p>
             </div>
             <div class="col-md-6">
                 <h4>Información del Cliente</h4>
                 <p><strong>Cliente:</strong> 
                     <a href="{% url 'black_invoices:cliente_detail' factura.cliente.pk %}">
-                        {{ factura.cliente.nombre }} {{ factura.cliente.apellido }}
+                        {{ factura.cliente.nombre_completo }}
                     </a>
                 </p>
                 <p><strong>Email:</strong> {{ factura.cliente.email }}</p>

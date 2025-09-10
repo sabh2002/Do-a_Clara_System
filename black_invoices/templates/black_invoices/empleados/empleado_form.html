@@ -5,15 +5,46 @@
 <div class="card">
     <div class="card-header">
         <h3 class="card-title">{{ titulo }}</h3>
+        {% if info_text %}
+        <div class="card-tools">
+            <small class="text-muted">{{ info_text }}</small>
+        </div>
+        {% endif %}
     </div>
     <div class="card-body">
         <form method="post">
             {% csrf_token %}
             
+            <!-- Información Personal -->
+            <h5><i class="fas fa-user"></i> Información Personal</h5>
             <div class="row">
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label for="{{ form.nombre.id_for_label }}">Nombre:</label>
+                        <label for="{{ form.cedula.id_for_label }}">Cédula <span class="text-danger">*</span>:</label>
+                        {{ form.cedula }}
+                        {% if form.cedula.help_text %}
+                            <small class="form-text text-muted">{{ form.cedula.help_text }}</small>
+                        {% endif %}
+                        {% if form.cedula.errors %}
+                            <div class="text-danger">{{ form.cedula.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="{{ form.email.id_for_label }}">{{ form.email.label }}:</label>
+                        {{ form.email }}
+                        {% if form.email.errors %}
+                            <div class="text-danger">{{ form.email.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="{{ form.nombre.id_for_label }}">Nombre <span class="text-danger">*</span>:</label>
                         {{ form.nombre }}
                         {% if form.nombre.errors %}
                             <div class="text-danger">{{ form.nombre.errors }}</div>
@@ -22,7 +53,7 @@
                 </div>
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label for="{{ form.apellido.id_for_label }}">Apellido:</label>
+                        <label for="{{ form.apellido.id_for_label }}">Apellido <span class="text-danger">*</span>:</label>
                         {{ form.apellido }}
                         {% if form.apellido.errors %}
                             <div class="text-danger">{{ form.apellido.errors }}</div>
@@ -31,34 +62,35 @@
                 </div>
             </div>
             
+            <!-- Información de Contacto -->
+            <h5 class="mt-4"><i class="fas fa-address-book"></i> Información de Contacto</h5>
             <div class="row">
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label for="{{ form.username.id_for_label }}">Nombre de Usuario:</label>
-                        {{ form.username }}
-                        {% if form.username.errors %}
-                            <div class="text-danger">{{ form.username.errors }}</div>
+                        <label for="{{ form.telefono.id_for_label }}">{{ form.telefono.label }}:</label>
+                        {{ form.telefono }}
+                        {% if form.telefono.errors %}
+                            <div class="text-danger">{{ form.telefono.errors }}</div>
                         {% endif %}
                     </div>
                 </div>
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label for="{{ form.password.id_for_label }}">Contraseña:</label>
-                        {{ form.password }}
-                        {% if form.password.errors %}
-                            <div class="text-danger">{{ form.password.errors }}</div>
-                        {% endif %}
-                        {% if object %}
-                            <small class="form-text text-muted">Dejar en blanco para mantener la contraseña actual</small>
+                        <label for="{{ form.direccion.id_for_label }}">{{ form.direccion.label }}:</label>
+                        {{ form.direccion }}
+                        {% if form.direccion.errors %}
+                            <div class="text-danger">{{ form.direccion.errors }}</div>
                         {% endif %}
                     </div>
                 </div>
             </div>
             
+            <!-- Información Laboral -->
+            <h5 class="mt-4"><i class="fas fa-briefcase"></i> Información Laboral</h5>
             <div class="row">
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label for="{{ form.nivel_acceso.id_for_label }}">Nivel de Acceso:</label>
+                        <label for="{{ form.nivel_acceso.id_for_label }}">Nivel de Acceso <span class="text-danger">*</span>:</label>
                         {{ form.nivel_acceso }}
                         {% if form.nivel_acceso.errors %}
                             <div class="text-danger">{{ form.nivel_acceso.errors }}</div>
@@ -66,9 +98,9 @@
                     </div>
                 </div>
                 <div class="col-md-6">
-                    <div class="form-group form-check">
+                    <div class="form-group form-check pt-4">
                         {{ form.activo }}
-                        <label class="form-check-label" for="{{ form.activo.id_for_label }}">Activo</label>
+                        <label class="form-check-label" for="{{ form.activo.id_for_label }}">Empleado Activo</label>
                         {% if form.activo.errors %}
                             <div class="text-danger">{{ form.activo.errors }}</div>
                         {% endif %}
@@ -76,9 +108,83 @@
                 </div>
             </div>
             
+            <!-- Acceso al Sistema -->
+            <h5 class="mt-4"><i class="fas fa-key"></i> Acceso al Sistema (Opcional)</h5>
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="form-group form-check">
+                        {{ form.crear_usuario }}
+                        <label class="form-check-label" for="{{ form.crear_usuario.id_for_label }}">
+                            {{ form.crear_usuario.label }}
+                        </label>
+                        {% if form.crear_usuario.help_text %}
+                            <small class="form-text text-muted">{{ form.crear_usuario.help_text }}</small>
+                        {% endif %}
+                        {% if form.crear_usuario.errors %}
+                            <div class="text-danger">{{ form.crear_usuario.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div id="campos-usuario" style="display: none;">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.username.id_for_label }}">{{ form.username.label }} <span class="text-danger">*</span>:</label>
+                            {{ form.username }}
+                            {% if form.username.help_text %}
+                                <small class="form-text text-muted">{{ form.username.help_text }}</small>
+                            {% endif %}
+                            {% if form.username.errors %}
+                                <div class="text-danger">{{ form.username.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group form-check pt-4">
+                            {{ form.is_staff }}
+                            <label class="form-check-label" for="{{ form.is_staff.id_for_label }}">
+                                {{ form.is_staff.label }}
+                            </label>
+                            {% if form.is_staff.help_text %}
+                                <small class="form-text text-muted">{{ form.is_staff.help_text }}</small>
+                            {% endif %}
+                            {% if form.is_staff.errors %}
+                                <div class="text-danger">{{ form.is_staff.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.password.id_for_label }}">{{ form.password.label }} <span class="text-danger">*</span>:</label>
+                            {{ form.password }}
+                            {% if form.password.help_text %}
+                                <small class="form-text text-muted">{{ form.password.help_text }}</small>
+                            {% endif %}
+                            {% if form.password.errors %}
+                                <div class="text-danger">{{ form.password.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.password_confirm.id_for_label }}">{{ form.password_confirm.label }} <span class="text-danger">*</span>:</label>
+                            {{ form.password_confirm }}
+                            {% if form.password_confirm.errors %}
+                                <div class="text-danger">{{ form.password_confirm.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <div class="mt-4">
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-save"></i> {{ accion }}
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-save"></i> {{ accion|default:"Guardar" }}
                 </button>
                 <a href="{% url 'black_invoices:empleado_list' %}" class="btn btn-secondary">
                     <i class="fas fa-times"></i> Cancelar
@@ -87,4 +193,46 @@
         </form>
     </div>
 </div>
+
+<!-- Información adicional -->
+<div class="row mt-3">
+    <div class="col-md-12">
+        <div class="card card-info">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-info-circle"></i> Información Importante
+                </h3>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">
+                    <li><strong>Separación de responsabilidades:</strong> Este formulario registra la información del empleado únicamente.</li>
+                    <li><strong>Acceso al sistema:</strong> Para dar acceso al sistema a un empleado, debe asignarle un usuario desde la lista de empleados.</li>
+                    <li><strong>Gestión de usuarios:</strong> Los usuarios del sistema se crean por separado en la sección "Usuarios".</li>
+                    <li><strong>Flexibilidad:</strong> Un empleado puede existir sin tener acceso al sistema, útil para empleados que no necesitan usar la aplicación.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const crearUsuarioCheckbox = document.getElementById('id_crear_usuario');
+    const camposUsuario = document.getElementById('campos-usuario');
+    
+    function toggleCamposUsuario() {
+        if (crearUsuarioCheckbox.checked) {
+            camposUsuario.style.display = 'block';
+        } else {
+            camposUsuario.style.display = 'none';
+        }
+    }
+    
+    // Estado inicial
+    toggleCamposUsuario();
+    
+    // Listener para cambios
+    crearUsuarioCheckbox.addEventListener('change', toggleCamposUsuario);
+});
+</script>
 {% endblock %}

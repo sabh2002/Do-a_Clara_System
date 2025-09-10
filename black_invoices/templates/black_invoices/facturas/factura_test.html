@@ -18,8 +18,8 @@
         <p>Título: {{ titulo }}</p>
         <p>Factura ID: {{ factura.id }}</p>
         <p>Factura Total: {{ factura.total_fac }}</p>
-        <p>Cliente: {% if factura.cliente %}{{ factura.cliente.nombre }} {{ factura.cliente.apellido }}{% else %}No disponible{% endif %}</p>
-        <p>Empleado: {% if factura.empleado %}{{ factura.empleado.nombre }}{% else %}No disponible{% endif %}</p>
+        <p>Cliente: {% if factura.cliente %}{{ factura.cliente.nombre_completo }}{% else %}No disponible{% endif %}</p>
+        <p>Empleado: {% if factura.empleado %}{{ factura.empleado.nombre_completo }}{% else %}No disponible{% endif %}</p>
         <p>Detalles Count: {% if detalles %}{{ detalles.count }}{% else %}0 o None{% endif %}</p>
         <p>Detalles: {{ detalles }}</p>
     </div>
@@ -33,7 +33,7 @@
     
     <h3>Cliente</h3>
     {% if factura.cliente %}
-    <p>Nombre: {{ factura.cliente.nombre }} {{ factura.cliente.apellido }}</p>
+    <p>Nombre: {{ factura.cliente.nombre_completo }}</p>
     <p>Email: {{ factura.cliente.email }}</p>
     <p>Teléfono: {{ factura.cliente.telefono }}</p>
     {% else %}

@@ -95,7 +95,7 @@
                         {% for detalle in detalles_ventas %}
                         <tr>
                             <td>{{ detalle.factura.fecha_fac|date:"d/m/Y" }}</td>
-                            <td>{{ detalle.factura.cliente.nombre }} {{ detalle.factura.cliente.apellido }}</td>
+                            <td>{{ detalle.factura.cliente.nombre_completo }}</td>
                             <td>{{ detalle.cantidad }}</td>
                             <td>${{ detalle.sub_total|floatformat:2 }}</td>
                         </tr>

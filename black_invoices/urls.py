@@ -34,9 +34,16 @@ urlpatterns = [
     path('ventas/<int:pk>/pago/', views.RegistrarPagoView.as_view(), name='registrar_pago'),
 
     # # Empleados
+    # Empleados
     path('empleados/', views.EmpleadoListView.as_view(), name='empleado_list'),
     path('empleados/crear/', views.EmpleadoCreateView.as_view(), name='empleado_create'),
+    path('empleados/<int:pk>/', views.EmpleadoDetailView.as_view(), name='empleado_detail'),
     path('empleados/<int:pk>/editar/', views.EmpleadoUpdateView.as_view(), name='empleado_update'),
+    path('empleados/<int:pk>/asignar-usuario/', views.AsignarUsuarioEmpleadoView.as_view(), name='empleado_asignar_usuario'),
+    
+    # Usuarios del sistema
+    path('usuarios/', views.UsuariosListView.as_view(), name='usuarios_list'),
+    path('usuarios/crear/', views.CrearUsuarioView.as_view(), name='usuario_create'),
     path('accounts/login/', views.ingresar, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('perfil/editar/', views.UserProfileUpdateView.as_view(), name='perfil_usuario_editar'),

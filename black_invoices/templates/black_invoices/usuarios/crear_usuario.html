@@ -1,0 +1,146 @@
+{% extends 'black_invoices/base/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-user-plus"></i> Crear Nuevo Usuario
+        </h3>
+        <div class="card-tools">
+            <small class="text-muted">Complete la información para crear un nuevo usuario del sistema</small>
+        </div>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            
+            <!-- Información de Acceso -->
+            <h5><i class="fas fa-key"></i> Información de Acceso</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="{{ form.username.id_for_label }}">Nombre de Usuario <span class="text-danger">*</span>:</label>
+                        {{ form.username }}
+                        {% if form.username.help_text %}
+                            <small class="form-text text-muted">{{ form.username.help_text }}</small>
+                        {% endif %}
+                        {% if form.username.errors %}
+                            <div class="text-danger">{{ form.username.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group form-check pt-4">
+                        {{ form.is_staff }}
+                        <label class="form-check-label" for="{{ form.is_staff.id_for_label }}">
+                            {{ form.is_staff.label }}
+                        </label>
+                        {% if form.is_staff.help_text %}
+                            <small class="form-text text-muted">{{ form.is_staff.help_text }}</small>
+                        {% endif %}
+                        {% if form.is_staff.errors %}
+                            <div class="text-danger">{{ form.is_staff.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="{{ form.password.id_for_label }}">Contraseña <span class="text-danger">*</span>:</label>
+                        {{ form.password }}
+                        {% if form.password.help_text %}
+                            <small class="form-text text-muted">{{ form.password.help_text }}</small>
+                        {% endif %}
+                        {% if form.password.errors %}
+                            <div class="text-danger">{{ form.password.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="{{ form.password_confirm.id_for_label }}">Confirmar Contraseña <span class="text-danger">*</span>:</label>
+                        {{ form.password_confirm }}
+                        {% if form.password_confirm.errors %}
+                            <div class="text-danger">{{ form.password_confirm.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Información Personal (Opcional) -->
+            <h5 class="mt-4"><i class="fas fa-user"></i> Información Personal (Opcional)</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="{{ form.first_name.id_for_label }}">{{ form.first_name.label }}:</label>
+                        {{ form.first_name }}
+                        {% if form.first_name.errors %}
+                            <div class="text-danger">{{ form.first_name.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="{{ form.last_name.id_for_label }}">{{ form.last_name.label }}:</label>
+                        {{ form.last_name }}
+                        {% if form.last_name.errors %}
+                            <div class="text-danger">{{ form.last_name.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="form-group">
+                        <label for="{{ form.email.id_for_label }}">{{ form.email.label }}:</label>
+                        {{ form.email }}
+                        {% if form.email.errors %}
+                            <div class="text-danger">{{ form.email.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+            
+            <div class="mt-4">
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-save"></i> Crear Usuario
+                </button>
+                <a href="{% url 'black_invoices:usuarios_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Información adicional -->
+<div class="row mt-3">
+    <div class="col-md-12">
+        <div class="card card-info">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-info-circle"></i> Información sobre Usuarios
+                </h3>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">
+                    <li><strong>Usuarios independientes:</strong> Este formulario crea usuarios que pueden existir sin estar asignados a empleados.</li>
+                    <li><strong>Asignación posterior:</strong> Puede asignar estos usuarios a empleados desde la gestión de empleados.</li>
+                    <li><strong>Acceso a administración:</strong> Marque "Acceso a administración" solo para usuarios que necesiten acceder al panel de Django.</li>
+                    <li><strong>Seguridad:</strong> Los usuarios solo pueden ser creados por administradores del sistema.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

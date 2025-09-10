@@ -11,7 +11,7 @@
             <div class="col-md-6">
                 <div class="callout callout-info">
                     <h5>Información de la Venta</h5>
-                    <p><strong>Cliente:</strong> {{ venta.factura.cliente.nombre }} {{ venta.factura.cliente.apellido }}</p>
+                    <p><strong>Cliente:</strong> {{ venta.factura.cliente.nombre_completo }}</p>
                     <p><strong>Fecha:</strong> {{ venta.factura.fecha_fac|date:"d/m/Y H:i" }}</p>
                     
                     <!-- PRECIOS EN DÓLARES Y BOLÍVARES -->

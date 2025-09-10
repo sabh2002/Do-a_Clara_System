@@ -8,14 +8,14 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.urls import reverse_lazy
 from django.views import View
-from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DetailView, DeleteView
+from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DetailView, DeleteView, FormView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
 from black_invoices.forms.user_profile_form import UserProfileForm
 from .models import *
 from .forms.producto_forms import ProductoForm
 from .forms.cliente_forms import ClienteForm
-from .forms.empleado_form import EmpleadoForm
+from .forms.empleado_form import EmpleadoForm, AsignarUsuarioEmpleadoForm, CrearUsuarioForm
 from .forms.ventas_form import FacturaForm, DetalleFacturaFormSet
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core import serializers
@@ -476,23 +476,39 @@ class EmpleadoCreateView(EmpleadoRolMixin, CreateView):
     def form_valid(self, form):
         try:
             with transaction.atomic():
-                # Crear usuario
-                user = User.objects.create_user(
-                    username=form.cleaned_data['username'],
-                    password=form.cleaned_data['password'] or '12345678',  # Contraseña temporal si no se proporciona
-                    first_name=form.cleaned_data['nombre'],
-                    last_name=form.cleaned_data['apellido']
-                )
-
                 # Crear empleado
-                empleado = form.save(commit=False)
-                empleado.user = user
-                empleado.save()
-
-                messages.success(self.request, f'Empleado {empleado.nombre} creado exitosamente')
+                empleado = form.save()
+                
+                # Si se seleccionó crear usuario, crearlo y asignarlo
+                if form.cleaned_data.get('crear_usuario'):
+                    user = User.objects.create_user(
+                        username=form.cleaned_data['username'],
+                        password=form.cleaned_data['password'],
+                        first_name=empleado.nombre,
+                        last_name=empleado.apellido,
+                        email=empleado.email or '',
+                        is_staff=form.cleaned_data.get('is_staff', False)
+                    )
+                    
+                    # Asignar usuario al empleado
+                    empleado.user = user
+                    empleado.save()
+                    
+                    messages.success(
+                        self.request, 
+                        f'Empleado {empleado.nombre_completo} y usuario "{user.username}" '
+                        f'creados exitosamente. El empleado ya tiene acceso al sistema.'
+                    )
+                else:
+                    messages.success(
+                        self.request, 
+                        f'Empleado {empleado.nombre_completo} registrado exitosamente. '
+                        f'Para darle acceso al sistema, asígnele un usuario desde la lista de empleados.'
+                    )
+                
                 return redirect(self.success_url)
         except Exception as e:
-            messages.error(self.request, f'Error al crear empleado: {str(e)}')
+            messages.error(self.request, f'Error al registrar empleado: {str(e)}')
             return self.form_invalid(form)
 
 class EmpleadoUpdateView(EmpleadoRolMixin, UpdateView):
@@ -530,6 +546,115 @@ class EmpleadoUpdateView(EmpleadoRolMixin, UpdateView):
         except Exception as e:
             messages.error(self.request, f'Error al actualizar empleado: {str(e)}')
             return self.form_invalid(form)
+
+
+# ===== NUEVAS VISTAS PARA GESTIÓN SEPARADA DE USUARIOS =====
+
+class CrearUsuarioView(EmpleadoRolMixin, FormView):
+    """Vista para crear usuarios del sistema (separado de empleados)"""
+    template_name = 'black_invoices/usuarios/crear_usuario.html'
+    form_class = CrearUsuarioForm
+    success_url = reverse_lazy('black_invoices:usuarios_list')
+    roles_permitidos = ['Administrador']
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['titulo'] = 'Crear Usuario del Sistema'
+        return context
+    
+    def form_valid(self, form):
+        try:
+            user = form.save()
+            messages.success(
+                self.request, 
+                f'Usuario "{user.username}" creado exitosamente. '
+                f'Ahora puede asignarlo a un empleado si es necesario.'
+            )
+            return super().form_valid(form)
+        except Exception as e:
+            messages.error(self.request, f'Error al crear usuario: {str(e)}')
+            return self.form_invalid(form)
+
+
+class UsuariosListView(EmpleadoRolMixin, ListView):
+    """Vista para listar usuarios del sistema"""
+    model = User
+    template_name = 'black_invoices/usuarios/usuarios_list.html'
+    context_object_name = 'usuarios'
+    roles_permitidos = ['Administrador']
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['titulo'] = 'Gestión de Usuarios del Sistema'
+        # Información adicional útil
+        context['usuarios_sin_empleado'] = User.objects.filter(empleado__isnull=True).count()
+        context['usuarios_con_empleado'] = User.objects.filter(empleado__isnull=False).count()
+        return context
+
+
+class AsignarUsuarioEmpleadoView(EmpleadoRolMixin, FormView):
+    """Vista para asignar un usuario a un empleado"""
+    template_name = 'black_invoices/empleados/asignar_usuario.html'
+    form_class = AsignarUsuarioEmpleadoForm
+    roles_permitidos = ['Administrador']
+    
+    def get_success_url(self):
+        return reverse_lazy('black_invoices:empleado_detail', kwargs={'pk': self.kwargs['pk']})
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['empleado'] = self.get_empleado()
+        return kwargs
+    
+    def get_empleado(self):
+        return get_object_or_404(Empleado, pk=self.kwargs['pk'])
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        empleado = self.get_empleado()
+        context['empleado'] = empleado
+        context['titulo'] = f'Asignar Usuario a {empleado.nombre_completo}'
+        return context
+    
+    def form_valid(self, form):
+        try:
+            empleado = self.get_empleado()
+            usuario = form.cleaned_data['usuario']
+            
+            # Asignar usuario al empleado
+            empleado.user = usuario
+            empleado.save()
+            
+            messages.success(
+                self.request,
+                f'Usuario "{usuario.username}" asignado exitosamente a {empleado.nombre_completo}'
+            )
+            return super().form_valid(form)
+        except Exception as e:
+            messages.error(self.request, f'Error al asignar usuario: {str(e)}')
+            return self.form_invalid(form)
+
+
+class EmpleadoDetailView(EmpleadoRolMixin, DetailView):
+    """Vista para ver detalles de un empleado"""
+    model = Empleado
+    template_name = 'black_invoices/empleados/empleado_detail.html'
+    context_object_name = 'empleado'
+    roles_permitidos = ['Administrador', 'Supervisor']
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        empleado = self.get_object()
+        context['titulo'] = f'Empleado: {empleado.nombre_completo}'
+        
+        # Información adicional
+        context['puede_asignar_usuario'] = (
+            not empleado.user and 
+            User.objects.filter(empleado__isnull=True).exists()
+        )
+        
+        return context
+
 
 #######################     FACTURAS        ######################
 class FacturaListView(LoginRequiredMixin, ListView):
@@ -839,7 +964,7 @@ class VentasPendientesView(EmpleadoRolMixin, ListView):
     model = Ventas
     template_name = 'black_invoices/ventas/ventas_pendientes.html'
     context_object_name = 'ventas'
-    roles_permitidos = ['Administrador', 'Supervisor', 'Vendedor']
+    roles_permitidos = ['Administrador', 'Secretaria', 'Supervisor', 'Vendedor']
 
     def get_queryset(self):
         from django.db.models import Case, When, F
@@ -868,7 +993,7 @@ class RegistrarPagoView(EmpleadoRolMixin, UpdateView):
     model = Ventas
     template_name = 'black_invoices/ventas/registrar_pago.html'
     fields = []
-    roles_permitidos = ['Administrador', 'Supervisor', 'Vendedor']
+    roles_permitidos = ['Administrador', 'Secretaria', 'Supervisor', 'Vendedor']
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1121,7 +1246,7 @@ def ingresar(request):
         p.drawString(400, height - 145, f"Nº Control: {factura.id:06d}")
         p.drawString(400, height - 160, f"Fecha: {factura.fecha_fac.strftime('%d-%m-%Y %H:%M')}")
         p.setFont("Helvetica-Bold", 10)
-        p.drawString(400, height - 175, f"VENDEDOR: {factura.empleado.nombre} {factura.empleado.apellido}")
+        p.drawString(400, height - 175, f"VENDEDOR: {factura.empleado.nombre_completo}")
         p.setFont("Helvetica", 10)
         p.drawString(400, height - 190, f"CONDICIÓN: {factura.get_metodo_pag_display()}")
 
@@ -1130,7 +1255,7 @@ def ingresar(request):
         p.drawString(50, height - 160, f"CLIENTE:")
         p.setFont("Helvetica", 10)
         p.drawString(50, height - 175, f"TLF: {factura.cliente.telefono}")
-        p.drawString(50, height - 190, f"NOMBRE: {factura.cliente.nombre} {factura.cliente.apellido}")
+        p.drawString(50, height - 190, f"NOMBRE: {factura.cliente.nombre_completo}")
         p.drawString(50, height - 205, f"DIRECCIÓN FISCAL: {factura.cliente.direccion}")
 
         # --- Tabla de productos ---
@@ -1261,14 +1386,14 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         p.drawString(400, height - 145, f"Nº Nota: {nota.numero_nota:06d}")
         p.drawString(400, height - 160, f"Fecha: {nota.fecha_nota.strftime('%d-%m-%Y %H:%M')}")
         p.setFont("Helvetica-Bold", 10)
-        p.drawString(400, height - 175, f"VENDEDOR: {nota.empleado.nombre} {nota.empleado.apellido}")
+        p.drawString(400, height - 175, f"VENDEDOR: {nota.empleado.nombre_completo}")
 
         # --- Datos del cliente ---
         p.setFont("Helvetica-Bold", 10)
         p.drawString(50, height - 160, f"CLIENTE:")
         p.setFont("Helvetica", 10)
         p.drawString(50, height - 175, f"TLF: {nota.cliente.telefono}")
-        p.drawString(50, height - 190, f"NOMBRE: {nota.cliente.nombre} {nota.cliente.apellido}")
+        p.drawString(50, height - 190, f"NOMBRE: {nota.cliente.nombre_completo}")
         p.drawString(50, height - 205, f"DIRECCIÓN: {nota.cliente.direccion}")
 
         # --- Tabla de productos ---
@@ -1374,7 +1499,7 @@ class FacturaPDFView(LoginRequiredMixin, View):
         p.drawString(400, height - 155, f"Nº Control: {factura.id:04d}")
         p.drawString(400, height - 170, f"Fecha: {factura.fecha_fac.strftime('%d-%m-%Y %H:%M')}")
         p.setFont("Helvetica-Bold", 10)
-        p.drawString(400, height - 185, f"VENDEDOR: {factura.empleado.nombre} {factura.empleado.apellido}")
+        p.drawString(400, height - 185, f"VENDEDOR: {factura.empleado.nombre_completo}")
         p.setFont("Helvetica", 10)
         p.drawString(400, height - 200, f"CONDICIÓN: {factura.get_metodo_pag_display()}")
 
@@ -1383,7 +1508,7 @@ class FacturaPDFView(LoginRequiredMixin, View):
         p.drawString(50, height - 170, f"CLIENTE:")
         p.setFont("Helvetica", 10)
         p.drawString(50, height - 185, f"TLF: {factura.cliente.telefono}")
-        p.drawString(50, height - 200, f"NOMBRE: {factura.cliente.nombre} {factura.cliente.apellido}")
+        p.drawString(50, height - 200, f"NOMBRE: {factura.cliente.nombre_completo}")
         p.drawString(50, height - 215, f"DIRECCIÓN FISCAL: {factura.cliente.direccion}")
 
         # --- Tabla de productos ---
@@ -1526,14 +1651,14 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         p.drawString(400, height - 155, f"Nº Nota: {nota.numero_nota:06d}")
         p.drawString(400, height - 170, f"Fecha: {nota.fecha_nota.strftime('%d-%m-%Y %H:%M')}")
         p.setFont("Helvetica-Bold", 10)
-        p.drawString(400, height - 185, f"VENDEDOR: {nota.empleado.nombre} {nota.empleado.apellido}")
+        p.drawString(400, height - 185, f"VENDEDOR: {nota.empleado.nombre_completo}")
 
         # --- Datos del cliente ---
         p.setFont("Helvetica-Bold", 10)
         p.drawString(50, height - 170, f"CLIENTE:")
         p.setFont("Helvetica", 10)
         p.drawString(50, height - 185, f"TLF: {nota.cliente.telefono}")
-        p.drawString(50, height - 200, f"NOMBRE: {nota.cliente.nombre} {nota.cliente.apellido}")
+        p.drawString(50, height - 200, f"NOMBRE: {nota.cliente.nombre_completo}")
         p.drawString(50, height - 215, f"DIRECCIÓN: {nota.cliente.direccion}")
 
         # --- Tabla de productos ---

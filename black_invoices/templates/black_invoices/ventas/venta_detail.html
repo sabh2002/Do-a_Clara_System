@@ -99,9 +99,9 @@
                                 <th>Cliente:</th>
                                 <td>
                                     {% if venta.factura %}
-                                    {{ venta.factura.cliente.nombre }} {{ venta.factura.cliente.apellido }}
+                                    {{ venta.factura.cliente.nombre_completo }}
                                     {% elif venta.nota_entrega %}
-                                    {{ venta.nota_entrega.cliente.nombre }} {{ venta.nota_entrega.cliente.apellido }}
+                                    {{ venta.nota_entrega.cliente.nombre_completo }}
                                     {% endif %}
                                 </td>
                             </tr>

@@ -1,0 +1,230 @@
+{% extends 'black_invoices/base/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-users"></i> Usuarios del Sistema
+        </h3>
+        <div class="card-tools">
+            <a href="{% url 'black_invoices:usuario_create' %}" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus"></i> Crear Usuario
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if usuarios %}
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped" id="usuariosTable">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Nombre Completo</th>
+                            <th>Email</th>
+                            <th>Estado</th>
+                            <th>Empleado Asignado</th>
+                            <th>Permisos</th>
+                            <th>Último Acceso</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for usuario in usuarios %}
+                        <tr>
+                            <td>
+                                <strong>{{ usuario.username }}</strong>
+                            </td>
+                            <td>
+                                {% if usuario.first_name or usuario.last_name %}
+                                    {{ usuario.first_name }} {{ usuario.last_name }}
+                                {% else %}
+                                    <span class="text-muted">No especificado</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if usuario.email %}
+                                    {{ usuario.email }}
+                                {% else %}
+                                    <span class="text-muted">No especificado</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if usuario.is_active %}
+                                    <span class="badge badge-success">Activo</span>
+                                {% else %}
+                                    <span class="badge badge-danger">Inactivo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if usuario.empleado %}
+                                    <a href="{% url 'black_invoices:empleado_detail' usuario.empleado.pk %}">
+                                        {{ usuario.empleado.nombre_completo }}
+                                    </a>
+                                {% else %}
+                                    <span class="text-muted">Sin asignar</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if usuario.is_superuser %}
+                                    <span class="badge badge-danger">Administrador</span>
+                                {% elif usuario.is_staff %}
+                                    <span class="badge badge-warning">Staff</span>
+                                {% else %}
+                                    <span class="badge badge-info">Usuario</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if usuario.last_login %}
+                                    {{ usuario.last_login|date:"d/m/Y H:i" }}
+                                {% else %}
+                                    <span class="text-muted">Nunca</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-info" 
+                                            title="Ver detalles" data-toggle="modal" 
+                                            data-target="#modalUsuario{{ usuario.pk }}">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    {% if not usuario.is_superuser or user.is_superuser %}
+                                    <button type="button" class="btn btn-sm btn-warning" 
+                                            title="Editar usuario"
+                                            onclick="editarUsuario({{ usuario.pk }})">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-4">
+                <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No hay usuarios registrados</h5>
+                <p class="text-muted">Comience creando el primer usuario del sistema.</p>
+                <a href="{% url 'black_invoices:usuario_create' %}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Crear Primer Usuario
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modales para detalles de usuarios -->
+{% for usuario in usuarios %}
+<div class="modal fade" id="modalUsuario{{ usuario.pk }}" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-user"></i> Detalles: {{ usuario.username }}
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Nombre de usuario:</strong><br>
+                        {{ usuario.username }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Estado:</strong><br>
+                        {% if usuario.is_active %}
+                            <span class="badge badge-success">Activo</span>
+                        {% else %}
+                            <span class="badge badge-danger">Inactivo</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Nombre:</strong><br>
+                        {{ usuario.first_name|default:"No especificado" }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Apellido:</strong><br>
+                        {{ usuario.last_name|default:"No especificado" }}
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-md-12">
+                        <strong>Email:</strong><br>
+                        {{ usuario.email|default:"No especificado" }}
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Fecha de registro:</strong><br>
+                        {{ usuario.date_joined|date:"d/m/Y H:i" }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Último acceso:</strong><br>
+                        {{ usuario.last_login|date:"d/m/Y H:i"|default:"Nunca" }}
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-md-12">
+                        <strong>Permisos:</strong><br>
+                        {% if usuario.is_superuser %}
+                            <span class="badge badge-danger">Administrador del Sistema</span>
+                        {% elif usuario.is_staff %}
+                            <span class="badge badge-warning">Acceso a Administración</span>
+                        {% else %}
+                            <span class="badge badge-info">Usuario Estándar</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if usuario.empleado %}
+                <hr>
+                <div class="row">
+                    <div class="col-md-12">
+                        <strong>Empleado asignado:</strong><br>
+                        <a href="{% url 'black_invoices:empleado_detail' usuario.empleado.pk %}">
+                            {{ usuario.empleado.nombre_completo }}
+                        </a>
+                        <br>
+                        <small class="text-muted">
+                            Cédula: {{ usuario.empleado.cedula }} | 
+                            Nivel: {{ usuario.empleado.get_nivel_acceso_display }}
+                        </small>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+$(document).ready(function() {
+    $('#usuariosTable').DataTable({
+        "language": {
+            "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Spanish.json"
+        },
+        "order": [[ 0, "asc" ]],
+        "pageLength": 25,
+        "responsive": true
+    });
+});
+
+function editarUsuario(userId) {
+    // Aquí se podría implementar la funcionalidad de edición
+    alert('Funcionalidad de edición de usuarios pendiente de implementar');
+}
+</script>
+{% endblock %}

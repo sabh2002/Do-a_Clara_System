@@ -70,14 +70,14 @@
                     <td data-sort="{{ venta.fecha_venta|date:'Y-m-d' }}">{{ venta.fecha_venta|date:'d/m/Y H:i' }}</td>
                     <td>
                         {% if venta.factura %}
-                            {{ venta.factura.cliente.nombre }} {{ venta.factura.cliente.apellido }}
+                            {{ venta.factura.cliente.nombre_completo }}
                         {% elif venta.nota_entrega %}
-                            {{ venta.nota_entrega.cliente.nombre }} {{ venta.nota_entrega.cliente.apellido }}
+                            {{ venta.nota_entrega.cliente.nombre_completo }}
                         {% else %}
                             Sin cliente
                         {% endif %}
                     </td>
-                    <td>{{ venta.empleado.nombre }} {{ venta.empleado.apellido }}</td>
+                    <td>{{ venta.empleado.nombre_completo }}</td>
                     <td>
                         <span class="badge 
                             {% if venta.factura %}badge-success

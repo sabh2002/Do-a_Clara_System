@@ -57,8 +57,8 @@
                 <tr>
                     <td>{{ factura.id }}</td>
                     <td data-sort="{{ factura.fecha_fac|date:'Y-m-d H:i:s' }}">{{ factura.fecha_fac|date:'d/m/Y H:i' }}</td>
-                    <td>{{ factura.cliente.nombre }} {{ factura.cliente.apellido }}</td>
-                    <td>{{ factura.empleado.nombre }} {{ factura.empleado.apellido }}</td>
+                    <td>{{ factura.cliente.nombre_completo }}</td>
+                    <td>{{ factura.empleado.nombre_completo }}</td>
                     <td>${{ factura.total_fac|floatformat:2 }}</td>
                     <td>
                         {% if factura.metodo_pag == 'efectivo' %}
