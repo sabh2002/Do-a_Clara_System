@@ -1551,8 +1551,8 @@ class FacturaPDFView(LoginRequiredMixin, View):
         other_pages_max_rows = int((other_pages_available_space - header_height) / row_height)
         
         # Límites estrictos para evitar superposición
-        first_page_max_rows = max(6, min(first_page_max_rows, 20))  # Máximo 10 productos en primera página
-        other_pages_max_rows = max(10, min(other_pages_max_rows, 20))  # Máximo 15 en otras páginas
+        first_page_max_rows = max(6, min(first_page_max_rows, 18))  # Máximo 10 productos en primera página
+        other_pages_max_rows = max(10, min(other_pages_max_rows, 18))  # Máximo 15 en otras páginas
 
         # --- Dividir productos en páginas ---
         product_pages = []
@@ -1816,10 +1816,10 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         other_pages_max_rows = int((other_pages_available_space - header_height) / row_height)
         
         # Límites estrictos
-        first_page_max_rows = max(6, min(first_page_max_rows, 20
+        first_page_max_rows = max(6, min(first_page_max_rows, 18
         
         ))
-        other_pages_max_rows = max(10, min(other_pages_max_rows, 20))
+        other_pages_max_rows = max(10, min(other_pages_max_rows, 18))
 
         # --- Dividir productos en páginas ---
         product_pages = []
