@@ -31,6 +31,7 @@ import io
 from .mixins import EmpleadoRolMixin
 import os
 from django.conf import settings
+from django.core.files.storage import FileSystemStorage
 from .models import *
 from django.db.models import Case, When, F, DecimalField, Value
 from decimal import Decimal
@@ -1463,150 +1464,265 @@ class FacturaPDFView(LoginRequiredMixin, View):
         p = canvas.Canvas(buffer, pagesize=letter)
         width, height = letter
 
-        # --- Membrete y Logo ---
-        logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
-        if os.path.exists(logo_path):
-            # Logo con tamaño personalizado ya ajustado
-            p.drawImage(logo_path, - 40, height - 140, width=290, height=120, preserveAspectRatio=True, mask='auto')
-
         # Obtener información de la empresa desde configuración
         config = ConfiguracionSistema.get_config()
-
-        # Obtener tasa de cambio actual
         tasa_actual = TasaCambio.get_tasa_actual()
         tasa_usd_ves = tasa_actual.tasa_usd_ves if tasa_actual else Decimal('1.0')
 
-        # Nombre de la empresa
-        p.setFont("Helvetica-Bold", 12)
-        p.drawString(180, height - 50, config.nombre_empresa)
+        def draw_header(page_num, total_pages):
+            """Dibuja el header en cada página"""
+            # --- Membrete y Logo ---
+            logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
+            if os.path.exists(logo_path):
+                p.drawImage(logo_path, -40, height - 140, width=290, height=120, preserveAspectRatio=True, mask='auto')
 
-        # RIF
-        p.setFont("Helvetica-Bold", 11)
-        p.drawString(180, height - 65, f"RIF: {config.rif_empresa}")
+            # Información de empresa
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(180, height - 50, config.nombre_empresa)
+            p.setFont("Helvetica-Bold", 11)
+            p.drawString(180, height - 65, f"RIF: {config.rif_empresa}")
+            p.setFont("Helvetica", 10)
+            p.drawString(180, height - 80, "Vda. 18 Casa Nro 48 Urb. Francisco de Miranda")
+            p.drawString(180, height - 95, "Telf: 0424-5439427 / 0424-5874882 / 0257-2532558")
+            p.drawString(180, height - 110, "Guanare Edo. Portuguesa")
 
-        # Dirección y teléfonos
-        p.setFont("Helvetica", 10)
-        p.drawString(180, height - 80, "Vda. 18 Casa Nro 48 Urb. Francisco de Miranda")
-        p.drawString(180, height - 95, "Telf: 0424-5439427 / 0424-5874882 / 0257-2532558")
-        p.drawString(180, height - 110, "Guanare Edo. Portuguesa")
+            # --- Datos generales ---
+            p.setFont("Helvetica-Bold", 13)
+            p.drawString(50, height - 140, f"FACTURA FISCAL Nº: {factura.numero_factura:04d}")
+            p.setFont("Helvetica", 10)
+            fecha_impresion = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+            p.drawString(400, height - 140, f"Fecha impresión: {fecha_impresion}")
+            p.drawString(400, height - 155, f"Nº Control: {factura.id:04d}")
+            p.drawString(400, height - 170, f"Fecha: {factura.fecha_fac.strftime('%d-%m-%Y %H:%M')}")
+            p.setFont("Helvetica-Bold", 10)
+            p.drawString(400, height - 185, f"VENDEDOR: {factura.empleado.nombre_completo}")
+            p.setFont("Helvetica", 10)
+            p.drawString(400, height - 200, f"CONDICIÓN: {factura.get_metodo_pag_display()}")
 
-        # --- Datos generales ---
-        p.setFont("Helvetica-Bold", 13)
-        p.drawString(50, height - 140, f"FACTURA FISCAL Nº: {factura.numero_factura:04d}")
-        p.setFont("Helvetica", 10)
-        fecha_impresion = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
-        p.drawString(400, height - 140, f"Fecha impresión: {fecha_impresion}")
-        p.drawString(400, height - 155, f"Nº Control: {factura.id:04d}")
-        p.drawString(400, height - 170, f"Fecha: {factura.fecha_fac.strftime('%d-%m-%Y %H:%M')}")
-        p.setFont("Helvetica-Bold", 10)
-        p.drawString(400, height - 185, f"VENDEDOR: {factura.empleado.nombre_completo}")
-        p.setFont("Helvetica", 10)
-        p.drawString(400, height - 200, f"CONDICIÓN: {factura.get_metodo_pag_display()}")
+            # --- Datos del cliente (solo en primera página) ---
+            if page_num == 1:
+                p.setFont("Helvetica-Bold", 10)
+                p.drawString(50, height - 170, f"CLIENTE:")
+                p.setFont("Helvetica", 10)
+                p.drawString(50, height - 185, f"TLF: {factura.cliente.telefono}")
+                p.drawString(50, height - 200, f"NOMBRE: {factura.cliente.nombre_completo}")
+                p.drawString(50, height - 215, f"DIRECCIÓN FISCAL: {factura.cliente.direccion}")
 
-        # --- Datos del cliente ---
-        p.setFont("Helvetica-Bold", 10)
-        p.drawString(50, height - 170, f"CLIENTE:")
-        p.setFont("Helvetica", 10)
-        p.drawString(50, height - 185, f"TLF: {factura.cliente.telefono}")
-        p.drawString(50, height - 200, f"NOMBRE: {factura.cliente.nombre_completo}")
-        p.drawString(50, height - 215, f"DIRECCIÓN FISCAL: {factura.cliente.direccion}")
+        def draw_table_header():
+            """Retorna el header de la tabla como lista"""
+            return ["#", "Código", "Producto", "Cant.", "Garantía", "Precio", "Precio Bs", "Total"]
 
-        # --- Tabla de productos ---
+        # --- Preparar datos de productos ---
         detalles = factura.detallefactura_set.all()
-        data = [["#", "Código", "Producto", "Cant.", "Garantía", "Precio", "Precio Bs", "Total"]]
+        productos_data = []
 
         for idx, detalle in enumerate(detalles, 1):
             codigo = str(detalle.producto.id)
             precio_bs = detalle.producto.precio * tasa_usd_ves
-            total_bs = detalle.sub_total * tasa_usd_ves
-
-            data.append([
+            
+            productos_data.append([
                 str(idx),
                 codigo,
-                detalle.producto.nombre,
+                detalle.producto.nombre[:28] + "..." if len(detalle.producto.nombre) > 28 else detalle.producto.nombre,
                 str(detalle.cantidad),
-                "Sí",  # Garantía
+                "Sí",
                 f"${detalle.producto.precio:,.2f}",
-                f"{precio_bs:,.2f}",  # Precio en Bs
+                f"{precio_bs:,.2f}",
                 f"${detalle.sub_total:,.2f}"
             ])
 
-        # Añadir fila de totales (SIN filas vacías adicionales)
-        data.append(["", "", "", "", "", "", "TOTAL", f"${factura.total_fac:,.2f}"])
+        # --- Calcular paginación CON MÁS ESPACIO RESERVADO ---
+        # Espacio disponible para tabla en primera página (después del header completo)
+        first_page_table_start = height - 240
+        # RESERVAR MÁS ESPACIO para totales, notas y footer (220 puntos en lugar de 150)
+        first_page_available_space = first_page_table_start - 220
+        
+        # Espacio disponible en páginas subsecuentes (solo header básico)
+        other_pages_table_start = height - 200
+        # RESERVAR ESPACIO para footer (100 puntos para asegurar que no se superponga)
+        other_pages_available_space = other_pages_table_start - 100
+        
+        # Altura aproximada por fila (incluyendo padding)
+        row_height = 14  # Un poco más de espacio por fila
+        header_height = 25  # Más espacio para el header
+        
+        # Calcular filas por página (MÁS CONSERVADOR)
+        first_page_max_rows = int((first_page_available_space - header_height) / row_height)
+        other_pages_max_rows = int((other_pages_available_space - header_height) / row_height)
+        
+        # Límites estrictos para evitar superposición
+        first_page_max_rows = max(6, min(first_page_max_rows, 15))  # Máximo 10 productos en primera página
+        other_pages_max_rows = max(10, min(other_pages_max_rows, 15))  # Máximo 15 en otras páginas
 
-        # Crear tabla con 8 columnas
-        table = Table(data, colWidths=[25, 60, 140, 40, 50, 60, 60, 60])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-            ('GRID', (0, 0), (-1, -2), 0.5, colors.black),  # Grid para todas las filas excepto la última
-            ('LINEABOVE', (6, -1), (7, -1), 0.5, colors.black),  # Línea solo arriba de "TOTAL" y su valor
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('ALIGN', (3, 1), (7, -1), 'RIGHT'),  # Alinear a la derecha desde Cant. hasta Total
-            ('ALIGN', (6, 1), (6, -2), 'RIGHT'),  # Precio Bs alineado a la derecha
-            ('FONTNAME', (6, -1), (7, -1), 'Helvetica-Bold'),  # Negrita para "TOTAL" y su valor
-        ]))
+        # --- Dividir productos en páginas ---
+        product_pages = []
+        current_index = 0
+        
+        # Primera página
+        if productos_data:
+            first_page_products = productos_data[:first_page_max_rows]
+            product_pages.append(first_page_products)
+            current_index = first_page_max_rows
+            
+            # Páginas subsecuentes
+            while current_index < len(productos_data):
+                next_page_products = productos_data[current_index:current_index + other_pages_max_rows]
+                product_pages.append(next_page_products)
+                current_index += other_pages_max_rows
 
-        table.wrapOn(p, width, height)
-        table.drawOn(p, 40, height - 340 - 20 * min(len(data), 6))
+        total_pages = len(product_pages) if product_pages else 1
 
-        # --- Sección de totales con ambas monedas ---
-        p.setFont("Helvetica", 8)
+        # --- Generar páginas ---
+        for page_num, page_products in enumerate(product_pages, 1):
+            # Dibujar header
+            draw_header(page_num, total_pages)
+            
+            # Preparar datos de la tabla para esta página
+            table_data = [draw_table_header()]
+            table_data.extend(page_products)
+            
+            # Solo añadir fila de totales en la última página
+            is_last_page = page_num == len(product_pages)
+            if is_last_page:
+                table_data.append(["", "", "", "", "", "", "TOTAL", f"${factura.total_fac:,.2f}"])
+            
+            # Crear y configurar tabla
+            table = Table(table_data, colWidths=[25, 60, 140, 40, 50, 60, 60, 60])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                ('GRID', (0, 0), (-1, -2 if is_last_page else -1), 0.5, colors.black),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('ALIGN', (3, 1), (7, -1), 'RIGHT'),
+                ('ALIGN', (6, 1), (6, -2 if is_last_page else -1), 'RIGHT'),
+            ]))
+            
+            if is_last_page:
+                table.setStyle(TableStyle([
+                    ('LINEABOVE', (6, -1), (7, -1), 0.5, colors.black),
+                    ('FONTNAME', (6, -1), (7, -1), 'Helvetica-Bold'),
+                ], add=True))
+            
+            # Posición de la tabla según la página
+            if page_num == 1:
+                table_y = first_page_table_start
+            else:
+                table_y = other_pages_table_start
+            
+            # Dibujar tabla
+            table.wrapOn(p, width, height)
+            table_width, table_height = table.wrap(width, height)
+            table.drawOn(p, 40, table_y - table_height)
+            
+            # Solo dibujar totales y notas en la última página
+            if is_last_page:
+                # Calcular posición para totales
+                totals_y = table_y - table_height - 40  # Más separación
+                
+                # Verificar que hay espacio suficiente para totales
+                if totals_y > 120:  # Necesitamos al menos 120 puntos para totales + footer
+                    # --- Sección de totales ---
+                    p.setFont("Helvetica", 8)
+                    subtotal_bs = factura.subtotal * tasa_usd_ves
+                    iva_bs = factura.iva * tasa_usd_ves
+                    total_bs = factura.total_fac * tasa_usd_ves
 
-        # Calcular totales en Bs
-        subtotal_bs = factura.subtotal * tasa_usd_ves
-        iva_bs = factura.iva * tasa_usd_ves
-        total_bs = factura.total_fac * tasa_usd_ves
+                    # Subtotal
+                    p.drawString(430, totals_y, "SUBTOTAL")
+                    p.drawString(500, totals_y, f"${factura.subtotal:,.2f}")
+                    p.drawString(550, totals_y, f"{subtotal_bs:,.2f} Bs")
 
-        # Subtotal
-        p.drawString(430, 140, "SUBTOTAL")
-        p.drawString(500, 140, f"${factura.subtotal:,.2f}")
-        p.drawString(550, 140, f"{subtotal_bs:,.2f} Bs")
+                    # IVA
+                    p.drawString(430, totals_y - 10, f"IVA ({config.porcentaje_iva}%)")
+                    p.drawString(500, totals_y - 10, f"${factura.iva:,.2f}")
+                    p.drawString(550, totals_y - 10, f"{iva_bs:,.2f} Bs")
 
-        # IVA
-        p.drawString(430, 130, f"IVA ({config.porcentaje_iva}%)")
-        p.drawString(500, 130, f"${factura.iva:,.2f}")
-        p.drawString(550, 130, f"{iva_bs:,.2f} Bs")
+                    # Línea horizontal
+                    p.line(430, totals_y - 15, 580, totals_y - 15)
 
-        # Línea horizontal
-        p.line(430, 125, 580, 125)
+                    # Total general
+                    p.setFont("Helvetica-Bold", 9)
+                    p.drawString(430, totals_y - 30, "TOTAL")
+                    p.drawString(500, totals_y - 30, f"${factura.total_fac:,.2f}")
+                    p.drawString(550, totals_y - 30, f"{total_bs:,.2f} Bs")
 
-        # Total general
-        p.setFont("Helvetica-Bold", 9)
-        p.drawString(430, 110, "TOTAL")
-        p.drawString(500, 110, f"${factura.total_fac:,.2f}")
-        p.drawString(550, 110, f"{total_bs:,.2f} Bs")
+                    # --- Nota importante ---
+                    notes_y = totals_y - 70
+                    if notes_y > 80:  # Solo si hay espacio suficiente
+                        p.setFont("Helvetica", 8)
+                        nota = "NOTA: NO SE ACEPTAN PAGOS DE DIVISAS EN EFECTIVO HECHOS AL ASESOR DE VENTA NI AL SUPERVISOR, ASÍ COMO TAMPOCO BS EN EFECTIVO, PAGO MÓVIL O TRANSFERENCIAS A LAS CUENTAS PERSONALES DEL ASESOR O DEL SUPERVISOR. SOLO SE RECONOCERÁN LOS PAGOS HECHOS A LAS CUENTAS DE LA EMPRESA."
+                        
+                        # Dividir nota en líneas
+                        nota_lineas = []
+                        for i in range(0, len(nota), 100):
+                            nota_lineas.append(nota[i:i+100])
+                        
+                        for i, linea in enumerate(nota_lineas):
+                            if notes_y - (i * 10) > 60:  # Asegurar espacio para footer
+                                p.drawString(40, notes_y - (i * 10), linea)
+                else:
+                    # Si no hay espacio, crear nueva página para totales
+                    p.showPage()
+                    draw_header(page_num, total_pages)  # Header en la nueva página
+                    
+                    # Dibujar totales en la nueva página
+                    totals_y = height - 200
+                    p.setFont("Helvetica", 8)
+                    subtotal_bs = factura.subtotal * tasa_usd_ves
+                    iva_bs = factura.iva * tasa_usd_ves
+                    total_bs = factura.total_fac * tasa_usd_ves
 
-        # --- Nota y pie de página ---
-        p.setFont("Helvetica", 8)
-        nota = "NO SE ACEPTAN PAGOS DE DIVISAS EN EFECTIVO HECHOS AL ASESOR DE VENTA NI AL SUPERVISOR, ASÍ COMO TAMPOCO BS EN EFECTIVO, PAGO MÓVIL O TRANSFERENCIAS A LAS CUENTAS PERSONALES DEL ASESOR O DEL SUPERVISOR. SOLO SE RECONOCERÁN LOS PAGOS HECHOS A LAS CUENTAS DE LA EMPRESA."
+                    # Subtotal
+                    p.drawString(430, totals_y, "SUBTOTAL")
+                    p.drawString(500, totals_y, f"${factura.subtotal:,.2f}")
+                    p.drawString(550, totals_y, f"{subtotal_bs:,.2f} Bs")
 
-        # Dividir nota en líneas de máximo 100 caracteres
-        nota_lineas = []
-        for i in range(0, len(nota), 100):
-            nota_lineas.append(nota[i:i+100])
+                    # IVA
+                    p.drawString(430, totals_y - 10, f"IVA ({config.porcentaje_iva}%)")
+                    p.drawString(500, totals_y - 10, f"${factura.iva:,.2f}")
+                    p.drawString(550, totals_y - 10, f"{iva_bs:,.2f} Bs")
 
-        # Dibujar cada línea de la nota
-        for i, linea in enumerate(nota_lineas):
-            p.drawString(40, 80 - (i * 10), linea)
+                    # Línea horizontal
+                    p.line(430, totals_y - 15, 580, totals_y - 15)
 
-        # Paginación
-        p.drawString(470, 30, f"Página 1 de 1")
+                    # Total general
+                    p.setFont("Helvetica-Bold", 9)
+                    p.drawString(430, totals_y - 30, "TOTAL")
+                    p.drawString(500, totals_y - 30, f"${factura.total_fac:,.2f}")
+                    p.drawString(550, totals_y - 30, f"{total_bs:,.2f} Bs")
 
-        # Footer
-        p.setFont("Helvetica", 8)
-        p.drawString(40, 30, f"{config.nombre_empresa} - Todos los derechos reservados")
+                    # Nota
+                    p.setFont("Helvetica", 8)
+                    nota = "NO SE ACEPTAN PAGOS DE DIVISAS EN EFECTIVO HECHOS AL ASESOR DE VENTA NI AL SUPERVISOR, ASÍ COMO TAMPOCO BS EN EFECTIVO, PAGO MÓVIL O TRANSFERENCIAS A LAS CUENTAS PERSONALES DEL ASESOR O DEL SUPERVISOR. SOLO SE RECONOCERÁN LOS PAGOS HECHOS A LAS CUENTAS DE LA EMPRESA."
+                    
+                    nota_lineas = []
+                    for i in range(0, len(nota), 100):
+                        nota_lineas.append(nota[i:i+100])
+                    
+                    notes_start_y = totals_y - 70
+                    for i, linea in enumerate(nota_lineas):
+                        p.drawString(40, notes_start_y - (i * 10), linea)
+            
+            # Footer en cada página
+            p.setFont("Helvetica", 8)
+            p.drawString(470, 30, f"Página {page_num} de {total_pages}")
+            p.drawString(40, 30, f"{config.nombre_empresa} - Todos los derechos reservados")
+            
+            # Nueva página si no es la última
+            if page_num < len(product_pages):
+                p.showPage()
 
-        p.showPage()
         p.save()
         buffer.seek(0)
+        
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="Factura_{factura.id}.pdf"'
         return response
+
 
 class NotaEntregaPDFView(LoginRequiredMixin, View):
     def get(self, request, pk):
@@ -1619,132 +1735,226 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         p = canvas.Canvas(buffer, pagesize=letter)
         width, height = letter
 
-        # --- Membrete y Logo ---
-        logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
-        if os.path.exists(logo_path):
-            # Logo con tamaño personalizado ya ajustado
-            p.drawImage(logo_path, - 40, height - 140, width=290, height=120, preserveAspectRatio=True, mask='auto')
-
         # Obtener información de la empresa desde configuración
         config = ConfiguracionSistema.get_config()
-
-        # Obtener tasa de cambio actual
         tasa_actual = TasaCambio.get_tasa_actual()
         tasa_usd_ves = tasa_actual.tasa_usd_ves if tasa_actual else Decimal('1.0')
 
-        # Información de empresa
-        p.setFont("Helvetica-Bold", 12)
-        p.drawString(180, height - 50, config.nombre_empresa)
-        p.setFont("Helvetica-Bold", 11)
-        p.drawString(180, height - 65, f"RIF: {config.rif_empresa}")
-        p.setFont("Helvetica", 10)
-        p.drawString(180, height - 80, "Vda. 18 Casa Nro 48 Urb. Francisco de Miranda")
-        p.drawString(180, height - 95, "Telf: 0424-5439427 / 0424-5874882 / 0257-2532558")
-        p.drawString(180, height - 110, "Guanare Edo. Portuguesa")
+        def draw_header(page_num, total_pages):
+            """Dibuja el header en cada página"""
+            # --- Membrete y Logo ---
+            logo_path = os.path.join(settings.BASE_DIR, 'black_invoices/static/img/logo2.png')
+            if os.path.exists(logo_path):
+                p.drawImage(logo_path, -40, height - 140, width=290, height=120, preserveAspectRatio=True, mask='auto')
 
-        # --- Datos generales ---
-        p.setFont("Helvetica-Bold", 13)
-        p.drawString(50, height - 140, f"NOTA DE ENTREGA Nº: {nota.numero_nota:04d}")
-        p.setFont("Helvetica", 10)
-        fecha_impresion = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
-        p.drawString(400, height - 140, f"Fecha impresión: {fecha_impresion}")
-        p.drawString(400, height - 155, f"Nº Nota: {nota.numero_nota:06d}")
-        p.drawString(400, height - 170, f"Fecha: {nota.fecha_nota.strftime('%d-%m-%Y %H:%M')}")
-        p.setFont("Helvetica-Bold", 10)
-        p.drawString(400, height - 185, f"VENDEDOR: {nota.empleado.nombre_completo}")
+            # Información de empresa
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(180, height - 50, config.nombre_empresa)
+            p.setFont("Helvetica-Bold", 11)
+            p.drawString(180, height - 65, f"RIF: {config.rif_empresa}")
+            p.setFont("Helvetica", 10)
+            p.drawString(180, height - 80, "Vda. 18 Casa Nro 48 Urb. Francisco de Miranda")
+            p.drawString(180, height - 95, "Telf: 0424-5439427 / 0424-5874882 / 0257-2532558")
+            p.drawString(180, height - 110, "Guanare Edo. Portuguesa")
 
-        # --- Datos del cliente ---
-        p.setFont("Helvetica-Bold", 10)
-        p.drawString(50, height - 170, f"CLIENTE:")
-        p.setFont("Helvetica", 10)
-        p.drawString(50, height - 185, f"TLF: {nota.cliente.telefono}")
-        p.drawString(50, height - 200, f"NOMBRE: {nota.cliente.nombre_completo}")
-        p.drawString(50, height - 215, f"DIRECCIÓN: {nota.cliente.direccion}")
+            # --- Datos generales ---
+            p.setFont("Helvetica-Bold", 13)
+            p.drawString(50, height - 140, f"NOTA DE ENTREGA Nº: {nota.numero_nota:04d}")
+            p.setFont("Helvetica", 10)
+            fecha_impresion = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+            p.drawString(400, height - 140, f"Fecha impresión: {fecha_impresion}")
+            p.drawString(400, height - 155, f"Nº Nota: {nota.numero_nota:06d}")
+            p.drawString(400, height - 170, f"Fecha: {nota.fecha_nota.strftime('%d-%m-%Y %H:%M')}")
+            p.setFont("Helvetica-Bold", 10)
+            p.drawString(400, height - 185, f"VENDEDOR: {nota.empleado.nombre_completo}")
 
-        # --- Tabla de productos ---
+            # --- Datos del cliente (solo en primera página) ---
+            if page_num == 1:
+                p.setFont("Helvetica-Bold", 10)
+                p.drawString(50, height - 170, f"CLIENTE:")
+                p.setFont("Helvetica", 10)
+                p.drawString(50, height - 185, f"TLF: {nota.cliente.telefono}")
+                p.drawString(50, height - 200, f"NOMBRE: {nota.cliente.nombre_completo}")
+                p.drawString(50, height - 215, f"DIRECCIÓN: {nota.cliente.direccion}")
+
+        def draw_table_header():
+            """Retorna el header de la tabla como lista"""
+            return ["#", "Código", "Producto", "Cant.", "Unidad", "Precio", "Precio Bs", "Total"]
+
+        # --- Preparar datos de productos ---
         detalles = nota.detalles_nota.all()
-        data = [["#", "Código", "Producto", "Cant.", "Unidad", "Precio", "Precio Bs", "Total"]]
+        productos_data = []
 
         for idx, detalle in enumerate(detalles, 1):
             codigo = detalle.producto.sku or str(detalle.producto.id)
             unidad = detalle.producto.unidad_medida.abreviatura if detalle.producto.unidad_medida else "UN"
             precio_bs = detalle.precio_unitario * tasa_usd_ves
-            total_bs = detalle.subtotal_linea * tasa_usd_ves
-
-            data.append([
+            
+            productos_data.append([
                 str(idx),
                 codigo,
-                detalle.producto.nombre,
+                detalle.producto.nombre[:28] + "..." if len(detalle.producto.nombre) > 28 else detalle.producto.nombre,
                 str(detalle.cantidad),
                 unidad,
                 f"${detalle.precio_unitario:,.2f}",
-                f"{precio_bs:,.2f}",  # Precio en Bs
+                f"{precio_bs:,.2f}",
                 f"${detalle.subtotal_linea:,.2f}"
             ])
 
-        # Fila de totales
-        data.append(["", "", "", "", "", "", "TOTAL", f"${nota.total:,.2f}"])
+        # --- Calcular paginación CON MÁS ESPACIO RESERVADO ---
+        first_page_table_start = height - 240
+        # RESERVAR MÁS ESPACIO para totales, notas y footer
+        first_page_available_space = first_page_table_start - 220
+        other_pages_table_start = height - 200
+        # RESERVAR ESPACIO para footer
+        other_pages_available_space = other_pages_table_start - 100
+        row_height = 14
+        header_height = 25
+        
+        # Calcular filas por página (MÁS CONSERVADOR)
+        first_page_max_rows = int((first_page_available_space - header_height) / row_height)
+        other_pages_max_rows = int((other_pages_available_space - header_height) / row_height)
+        
+        # Límites estrictos
+        first_page_max_rows = max(6, min(first_page_max_rows, 15
+        
+        ))
+        other_pages_max_rows = max(10, min(other_pages_max_rows, 15))
 
-        # Crear tabla
-        table = Table(data, colWidths=[25, 60, 160, 40, 40, 60, 60, 60])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-            ('GRID', (0, 0), (-1, -2), 0.5, colors.black),
-            ('LINEABOVE', (6, -1), (7, -1), 0.5, colors.black),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('ALIGN', (3, 1), (7, -1), 'RIGHT'),
-            ('ALIGN', (6, 1), (6, -2), 'RIGHT'),  # Precio Bs alineado a la derecha
-            ('FONTNAME', (6, -1), (7, -1), 'Helvetica-Bold'),
-        ]))
+        # --- Dividir productos en páginas ---
+        product_pages = []
+        current_index = 0
+        
+        if productos_data:
+            first_page_products = productos_data[:first_page_max_rows]
+            product_pages.append(first_page_products)
+            current_index = first_page_max_rows
+            
+            while current_index < len(productos_data):
+                next_page_products = productos_data[current_index:current_index + other_pages_max_rows]
+                product_pages.append(next_page_products)
+                current_index += other_pages_max_rows
 
-        table.wrapOn(p, width, height)
-        table.drawOn(p, 40, height - 360)
+        total_pages = len(product_pages) if product_pages else 1
 
-        # --- Totales con ambas monedas ---
-        p.setFont("Helvetica", 8)
+        # --- Generar páginas ---
+        for page_num, page_products in enumerate(product_pages, 1):
+            # Dibujar header
+            draw_header(page_num, total_pages)
+            
+            # Preparar datos de la tabla
+            table_data = [draw_table_header()]
+            table_data.extend(page_products)
+            
+            # Solo añadir totales en la última página
+            is_last_page = page_num == len(product_pages)
+            if is_last_page:
+                table_data.append(["", "", "", "", "", "", "TOTAL", f"${nota.total:,.2f}"])
+            
+            # Crear tabla
+            table = Table(table_data, colWidths=[25, 60, 160, 40, 40, 60, 60, 60])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                ('GRID', (0, 0), (-1, -2 if is_last_page else -1), 0.5, colors.black),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('ALIGN', (3, 1), (7, -1), 'RIGHT'),
+                ('ALIGN', (6, 1), (6, -2 if is_last_page else -1), 'RIGHT'),
+            ]))
+            
+            if is_last_page:
+                table.setStyle(TableStyle([
+                    ('LINEABOVE', (6, -1), (7, -1), 0.5, colors.black),
+                    ('FONTNAME', (6, -1), (7, -1), 'Helvetica-Bold'),
+                ], add=True))
+            
+            # Posición de la tabla
+            if page_num == 1:
+                table_y = first_page_table_start
+            else:
+                table_y = other_pages_table_start
+            
+            # Dibujar tabla
+            table.wrapOn(p, width, height)
+            table_width, table_height = table.wrap(width, height)
+            table.drawOn(p, 40, table_y - table_height)
+            
+            # Solo totales y notas en la última página
+            if is_last_page:
+                totals_y = table_y - table_height - 40
+                
+                # Verificar espacio para totales
+                if totals_y > 120:
+                    # --- Totales ---
+                    p.setFont("Helvetica", 8)
+                    subtotal_bs = nota.subtotal * tasa_usd_ves
+                    iva_bs = nota.iva * tasa_usd_ves
+                    total_bs = nota.total * tasa_usd_ves
 
-        # Calcular totales en Bs
-        subtotal_bs = nota.subtotal * tasa_usd_ves
-        iva_bs = nota.iva * tasa_usd_ves
-        total_bs = nota.total * tasa_usd_ves
+                    p.drawString(430, totals_y, "SUBTOTAL")
+                    p.drawString(500, totals_y, f"${nota.subtotal:,.2f}")
+                    p.drawString(550, totals_y, f"{subtotal_bs:,.2f} Bs")
 
-        # Subtotal
-        p.drawString(430, 140, "SUBTOTAL")
-        p.drawString(500, 140, f"${nota.subtotal:,.2f}")
-        p.drawString(550, 140, f"{subtotal_bs:,.2f} Bs")
+                    p.drawString(430, totals_y - 10, f"IVA ({config.porcentaje_iva}%)")
+                    p.drawString(500, totals_y - 10, f"${nota.iva:,.2f}")
+                    p.drawString(550, totals_y - 10, f"{iva_bs:,.2f} Bs")
 
-        # IVA
-        p.drawString(430, 130, f"IVA ({config.porcentaje_iva}%)")
-        p.drawString(500, 130, f"${nota.iva:,.2f}")
-        p.drawString(550, 130, f"{iva_bs:,.2f} Bs")
+                    p.line(430, totals_y - 15, 580, totals_y - 15)
 
-        # Línea horizontal
-        p.line(430, 125, 580, 125)
+                    p.setFont("Helvetica-Bold", 9)
+                    p.drawString(430, totals_y - 30, "TOTAL")
+                    p.drawString(500, totals_y - 30, f"${nota.total:,.2f}")
+                    p.drawString(550, totals_y - 30, f"{total_bs:,.2f} Bs")
 
-        # Total general
-        p.setFont("Helvetica-Bold", 9)
-        p.drawString(430, 110, "TOTAL")
-        p.drawString(500, 110, f"${nota.total:,.2f}")
-        p.drawString(550, 110, f"{total_bs:,.2f} Bs")
+                    # --- Nota importante ---
+                    notes_y = totals_y - 70
+                    if notes_y > 80:
+                        p.setFont("Helvetica", 8)
+                        nota_texto = "NOTA IMPORTANTE: Este documento es una NOTA DE ENTREGA. La Factura Fiscal se generará al completar el pago."
+                        p.drawString(40, notes_y, nota_texto)
+                else:
+                    # Nueva página para totales si no hay espacio
+                    p.showPage()
+                    draw_header(page_num, total_pages)
+                    
+                    totals_y = height - 200
+                    p.setFont("Helvetica", 8)
+                    subtotal_bs = nota.subtotal * tasa_usd_ves
+                    iva_bs = nota.iva * tasa_usd_ves
+                    total_bs = nota.total * tasa_usd_ves
 
-        # --- Nota importante ---
-        p.setFont("Helvetica", 8)
-        nota_texto = "NOTA IMPORTANTE: Este documento es una NOTA DE ENTREGA. La Factura Fiscal se generará al completar el pago."
-        p.drawString(40, 90, nota_texto)
+                    p.drawString(430, totals_y, "SUBTOTAL")
+                    p.drawString(500, totals_y, f"${nota.subtotal:,.2f}")
+                    p.drawString(550, totals_y, f"{subtotal_bs:,.2f} Bs")
 
-        # --- Paginación (AGREGADA) ---
-        p.drawString(470, 30, f"Página 1 de 1")
+                    p.drawString(430, totals_y - 10, f"IVA ({config.porcentaje_iva}%)")
+                    p.drawString(500, totals_y - 10, f"${nota.iva:,.2f}")
+                    p.drawString(550, totals_y - 10, f"{iva_bs:,.2f} Bs")
 
-        # Footer
-        p.setFont("Helvetica", 8)
-        p.drawString(40, 30, f"{config.nombre_empresa} - Sistema de Ventas")
+                    p.line(430, totals_y - 15, 580, totals_y - 15)
 
-        p.showPage()
+                    p.setFont("Helvetica-Bold", 9)
+                    p.drawString(430, totals_y - 30, "TOTAL")
+                    p.drawString(500, totals_y - 30, f"${nota.total:,.2f}")
+                    p.drawString(550, totals_y - 30, f"{total_bs:,.2f} Bs")
+
+                    p.setFont("Helvetica", 8)
+                    nota_texto = "NOTA IMPORTANTE: Este documento es una NOTA DE ENTREGA. La Factura Fiscal se generará al completar el pago."
+                    p.drawString(40, totals_y - 70, nota_texto)
+            
+            # Footer en cada página
+            p.setFont("Helvetica", 8)
+            p.drawString(470, 30, f"Página {page_num} de {total_pages}")
+            p.drawString(40, 30, f"{config.nombre_empresa} - Sistema de Ventas")
+            
+            # Nueva página si no es la última
+            if page_num < len(product_pages):
+                p.showPage()
+
         p.save()
         buffer.seek(0)
 
@@ -1775,7 +1985,7 @@ def export_database_view(request):
         # Crear la respuesta HTTP para descargar el archivo
         response = HttpResponse(buffer.getvalue(), content_type='application/json')
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        response['Content-Disposition'] = f'attachment; filename="backup_theblacksystem_{timestamp}.json"'
+        response['Content-Disposition'] = f'attachment; filename="backup_corporacion_agricola_{timestamp}.json"'
 
         messages.success(request, "Exportación de datos completada exitosamente.")
         return response
@@ -1799,15 +2009,36 @@ def import_database_view(request):
             uploaded_file_path = fs.path(filename)
 
             try:
-                # Validar que es un JSON (opcional pero recomendado)
-                with open(uploaded_file_path, 'r') as f:
-                    json.load(f) # Intenta parsear, si falla, no es JSON válido
+                # Validar que es un JSON y limpiar datos problemáticos
+                with open(uploaded_file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                # Limpiar referencias de foreign keys que puedan causar problemas
+                for obj in data:
+                    if obj['model'] == 'black_invoices.empleado':
+                        # Si el empleado tiene user_id pero no existe ese usuario, ponerlo como null
+                        user_id = obj['fields'].get('user')
+                        if user_id:
+                            try:
+                                from django.contrib.auth.models import User
+                                User.objects.get(pk=user_id)
+                            except User.DoesNotExist:
+                                obj['fields']['user'] = None
+                                print(f"Empleado {obj['pk']}: user_id {user_id} no existe, establecido como null")
+                
+                # Guardar los datos limpiados en un archivo temporal con extensión .json
+                base_path = os.path.splitext(uploaded_file_path)[0]
+                cleaned_file_path = f"{base_path}_cleaned.json"
+                with open(cleaned_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
 
-                # Ejecutar loaddata
-                # ¡ADVERTENCIA! loaddata puede sobreescribir datos si las PKs coinciden o causar errores.
-                # Es altamente recomendable que el admin sepa lo que está haciendo.
-                # Considera hacer un backup ANTES de importar.
-                call_command('loaddata', uploaded_file_path)
+                # Ejecutar loaddata con los datos limpiados
+                call_command('loaddata', cleaned_file_path)
+                
+                # Eliminar archivo temporal limpiado
+                if os.path.exists(cleaned_file_path):
+                    os.remove(cleaned_file_path)
+                    
                 messages.success(request, "Importación de datos completada exitosamente.")
             except json.JSONDecodeError:
                 messages.error(request, "Error: El archivo proporcionado no es un JSON válido.")

@@ -1,0 +1,1748 @@
+[
+  {
+    "model": "black_invoices.nivelacceso",
+    "pk": 2,
+    "fields": {
+      "nombre": "Administrador",
+      "descripcion": "Admin"
+    }
+  },
+  {
+    "model": "black_invoices.nivelacceso",
+    "pk": 3,
+    "fields": {
+      "nombre": "Secretaria",
+      "descripcion": "Secretaria"
+    }
+  },
+  {
+    "model": "black_invoices.cliente",
+    "pk": 1,
+    "fields": {
+      "tipo_documento": "V",
+      "numero_documento": "15349602",
+      "cedula": "V15349602",
+      "nombre_completo": "YOLMAN GONZALEZ",
+      "email": null,
+      "telefono": "04245874882",
+      "direccion": "GUANARE ESTADO PORTUGUESA",
+      "fecha_registro": "2025-09-10T14:55:35.447Z",
+      "fecha_actualizacion": "2025-09-10T14:55:35.447Z"
+    }
+  },
+  {
+    "model": "black_invoices.cliente",
+    "pk": 2,
+    "fields": {
+      "tipo_documento": "V",
+      "numero_documento": "7431333",
+      "cedula": "V7431333",
+      "nombre_completo": "JOSE DE LA GALA",
+      "email": null,
+      "telefono": "04145223468",
+      "direccion": "AUTOPISTA JOSE ANTONIO PAEZ, SECTOR LAS MARIA, GUANARE ESTADO PORTUGUESA",
+      "fecha_registro": "2025-09-10T14:57:52.967Z",
+      "fecha_actualizacion": "2025-09-10T14:57:52.967Z"
+    }
+  },
+  {
+    "model": "black_invoices.cliente",
+    "pk": 3,
+    "fields": {
+      "tipo_documento": "V",
+      "numero_documento": "9408773",
+      "cedula": "V9408773",
+      "nombre_completo": "EMILIO VARGAS",
+      "email": null,
+      "telefono": "04122195273",
+      "direccion": "GUANARE ESTADO PORTUGUESA",
+      "fecha_registro": "2025-09-10T14:58:55.647Z",
+      "fecha_actualizacion": "2025-09-10T14:58:55.647Z"
+    }
+  },
+  {
+    "model": "black_invoices.cliente",
+    "pk": 4,
+    "fields": {
+      "tipo_documento": "V",
+      "numero_documento": "15400133",
+      "cedula": "V15400133",
+      "nombre_completo": "JUAN TORRES",
+      "email": null,
+      "telefono": "04127611076",
+      "direccion": "GUANARE ESTADO PORTUGUESA",
+      "fecha_registro": "2025-09-10T14:59:45.174Z",
+      "fecha_actualizacion": "2025-09-10T14:59:45.174Z"
+    }
+  },
+  {
+    "model": "black_invoices.cliente",
+    "pk": 5,
+    "fields": {
+      "tipo_documento": "J",
+      "numero_documento": "506157306",
+      "cedula": "J506157306",
+      "nombre_completo": "AGRO SERVICIOS LA PATRONA 327",
+      "email": null,
+      "telefono": "04245874404",
+      "direccion": "PAPAYITO MUNICIPIO PAPELON ESTADO PORTUGUESA",
+      "fecha_registro": "2025-09-10T15:02:28.735Z",
+      "fecha_actualizacion": "2025-09-10T15:02:28.735Z"
+    }
+  },
+  {
+    "model": "black_invoices.cliente",
+    "pk": 6,
+    "fields": {
+      "tipo_documento": "V",
+      "numero_documento": "24021300",
+      "cedula": "V24021300",
+      "nombre_completo": "PABLO ALFONSO",
+      "email": null,
+      "telefono": "04125205469",
+      "direccion": "URB LA GRANJA GUANARE ESTADO PORTUGUESA",
+      "fecha_registro": "2025-09-10T15:04:43.302Z",
+      "fecha_actualizacion": "2025-09-10T15:04:43.302Z"
+    }
+  },
+  {
+    "model": "black_invoices.cliente",
+    "pk": 7,
+    "fields": {
+      "tipo_documento": "V",
+      "numero_documento": "19712024",
+      "cedula": "V19712024",
+      "nombre_completo": "HECTOR LUIS SIVIRA",
+      "email": null,
+      "telefono": "04245528539",
+      "direccion": "GUANARE ESTADO PORTUGUESA",
+      "fecha_registro": "2025-09-10T15:05:47.034Z",
+      "fecha_actualizacion": "2025-09-10T15:05:47.034Z"
+    }
+  },
+  {
+    "model": "black_invoices.cliente",
+    "pk": 8,
+    "fields": {
+      "tipo_documento": "V",
+      "numero_documento": "10727263",
+      "cedula": "V10727263",
+      "nombre_completo": "YOKSAN CORTES",
+      "email": null,
+      "telefono": "04169507183",
+      "direccion": "GUANARE ESTADO PORTUGUESA",
+      "fecha_registro": "2025-09-10T15:06:34.579Z",
+      "fecha_actualizacion": "2025-09-10T15:06:34.579Z"
+    }
+  },
+  {
+    "model": "black_invoices.cliente",
+    "pk": 9,
+    "fields": {
+      "tipo_documento": "V",
+      "numero_documento": "7139735",
+      "cedula": "V7139735",
+      "nombre_completo": "ERVI FRAN BAZAN",
+      "email": null,
+      "telefono": "04145574650",
+      "direccion": "GUANARE ESTADO PORTUGUESA",
+      "fecha_registro": "2025-09-10T15:07:17.276Z",
+      "fecha_actualizacion": "2025-09-10T15:07:17.276Z"
+    }
+  },
+  {
+    "model": "black_invoices.cliente",
+    "pk": 10,
+    "fields": {
+      "tipo_documento": "V",
+      "numero_documento": "14569884",
+      "cedula": "V14569884",
+      "nombre_completo": "OSCAR JESUS MADROÑERO PEREZ",
+      "email": null,
+      "telefono": "04121584199",
+      "direccion": "SAN MIGUEL MUNICIPIO PAPELON ESTADO PORTUGUESA",
+      "fecha_registro": "2025-09-10T15:08:31.285Z",
+      "fecha_actualizacion": "2025-09-10T15:08:31.285Z"
+    }
+  },
+  {
+    "model": "black_invoices.cliente",
+    "pk": 11,
+    "fields": {
+      "tipo_documento": "V",
+      "numero_documento": "7379433",
+      "cedula": "V7379433",
+      "nombre_completo": "MANUELA DE LA GALA",
+      "email": null,
+      "telefono": "04145463247",
+      "direccion": "GUANARE ESTADO PORTUGUESA",
+      "fecha_registro": "2025-09-10T15:19:29.630Z",
+      "fecha_actualizacion": "2025-09-10T15:19:29.630Z"
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 1,
+    "fields": {
+      "sku": "MANGR1-04",
+      "nombre": "Manguera 100R1 1/4",
+      "descripcion": "Manguera hidráulica 100R1 de 1/4 pulgada",
+      "precio": "8.00",
+      "stock": "25.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.306Z",
+      "updated_at": "2025-09-10T20:21:36.923Z",
+      "precio_compra": "3.20",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 2,
+    "fields": {
+      "sku": "MANGR1-06",
+      "nombre": "Manguera 100R1 3/8",
+      "descripcion": "Manguera hidráulica 100R1 de 3/8 pulgada",
+      "precio": "10.00",
+      "stock": "25.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.314Z",
+      "updated_at": "2025-09-10T20:22:43.601Z",
+      "precio_compra": "4.44",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 3,
+    "fields": {
+      "sku": "MANGR1-08",
+      "nombre": "Manguera 100R1 1/2",
+      "descripcion": "Manguera hidráulica 100R1 de 1/2 pulgada",
+      "precio": "12.00",
+      "stock": "25.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.317Z",
+      "updated_at": "2025-09-10T20:23:46.201Z",
+      "precio_compra": "4.54",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 4,
+    "fields": {
+      "sku": "MR2-025",
+      "nombre": "Mang 100R2 1/4",
+      "descripcion": "Manguera hidráulica 100R2 de 1/4 pulgada",
+      "precio": "1.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.320Z",
+      "updated_at": "2025-09-10T05:57:33.320Z",
+      "precio_compra": "0.70",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 5,
+    "fields": {
+      "sku": "MR2-038",
+      "nombre": "Mang 100R2 3/8",
+      "descripcion": "Manguera hidráulica 100R2 de 3/8 pulgada",
+      "precio": "1.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.323Z",
+      "updated_at": "2025-09-10T05:57:33.323Z",
+      "precio_compra": "0.70",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 6,
+    "fields": {
+      "sku": "MR2-050",
+      "nombre": "Mang 100R2 1/2",
+      "descripcion": "Manguera hidráulica 100R2 de 1/2 pulgada",
+      "precio": "1.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.326Z",
+      "updated_at": "2025-09-10T05:57:33.326Z",
+      "precio_compra": "0.70",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 7,
+    "fields": {
+      "sku": "MR2-062",
+      "nombre": "Mang 100R2 5/8",
+      "descripcion": "Manguera hidráulica 100R2 de 5/8 pulgada",
+      "precio": "1.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.330Z",
+      "updated_at": "2025-09-10T05:57:33.330Z",
+      "precio_compra": "0.70",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 8,
+    "fields": {
+      "sku": "MR2-075",
+      "nombre": "Mang 100R2 3/4",
+      "descripcion": "Manguera hidráulica 100R2 de 3/4 pulgada",
+      "precio": "1.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.334Z",
+      "updated_at": "2025-09-10T05:57:33.334Z",
+      "precio_compra": "0.70",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 9,
+    "fields": {
+      "sku": "MR2-100",
+      "nombre": "Mang 100R2 1\"",
+      "descripcion": "Manguera hidráulica 100R2 de 1 pulgada",
+      "precio": "1.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.337Z",
+      "updated_at": "2025-09-10T05:57:33.337Z",
+      "precio_compra": "0.70",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 10,
+    "fields": {
+      "sku": "MR2-125",
+      "nombre": "Mang 100R2 1¼",
+      "descripcion": "Manguera hidráulica 100R2 de 1¼ pulgada",
+      "precio": "1.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.340Z",
+      "updated_at": "2025-09-10T05:57:33.340Z",
+      "precio_compra": "0.70",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 11,
+    "fields": {
+      "sku": "MANGR12-08",
+      "nombre": "Manguera 100R12 1/2",
+      "descripcion": "Manguera hidráulica R12 de 1/2 pulgada",
+      "precio": "32.00",
+      "stock": "110.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.343Z",
+      "updated_at": "2025-09-10T20:28:40.537Z",
+      "precio_compra": "14.41",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 12,
+    "fields": {
+      "sku": "MANGR12-10",
+      "nombre": "Manguera 100R12 5/8",
+      "descripcion": "Manguera hidráulica R12 de 5/8 pulgada",
+      "precio": "36.00",
+      "stock": "50.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.346Z",
+      "updated_at": "2025-09-10T20:29:05.196Z",
+      "precio_compra": "17.67",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 13,
+    "fields": {
+      "sku": "MANGR12-12",
+      "nombre": "Manguera 100R12 3/4",
+      "descripcion": "Manguera hidráulica R12 de 3/4 pulgada",
+      "precio": "40.00",
+      "stock": "40.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.349Z",
+      "updated_at": "2025-09-10T20:30:59.621Z",
+      "precio_compra": "19.89",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 14,
+    "fields": {
+      "sku": "MR12-125",
+      "nombre": "Mang R12 1¼",
+      "descripcion": "Manguera hidráulica R12 de 1¼ pulgada",
+      "precio": "1.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.352Z",
+      "updated_at": "2025-09-10T05:57:33.352Z",
+      "precio_compra": "0.70",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 15,
+    "fields": {
+      "sku": "MR15-075",
+      "nombre": "Mang 100R15 3/4",
+      "descripcion": "Manguera hidráulica 100R15 de 3/4 pulgada",
+      "precio": "1.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.356Z",
+      "updated_at": "2025-09-10T05:57:33.356Z",
+      "precio_compra": "0.70",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 16,
+    "fields": {
+      "sku": "MR15-100",
+      "nombre": "Mang 100R15 1\"",
+      "descripcion": "Manguera hidráulica 100R15 de 1 pulgada",
+      "precio": "1.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.359Z",
+      "updated_at": "2025-09-10T05:57:33.359Z",
+      "precio_compra": "0.70",
+      "unidad_medida": 1
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 17,
+    "fields": {
+      "sku": "FKR1-04",
+      "nombre": "Ferrul R1 1/4",
+      "descripcion": "Férula R1 para manguera de 1/4 pulgada",
+      "precio": "2.50",
+      "stock": "40.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.362Z",
+      "updated_at": "2025-09-10T19:46:05.401Z",
+      "precio_compra": "0.42",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 18,
+    "fields": {
+      "sku": "FKR1-06",
+      "nombre": "Ferrul R1 3/8",
+      "descripcion": "Férula R1 para manguera de 3/8 pulgada",
+      "precio": "3.00",
+      "stock": "40.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.365Z",
+      "updated_at": "2025-09-10T19:47:41.455Z",
+      "precio_compra": "0.55",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 19,
+    "fields": {
+      "sku": "FKR1-08",
+      "nombre": "Ferrul R1 1/2",
+      "descripcion": "Férula R1 para manguera de 1/2 pulgada",
+      "precio": "4.00",
+      "stock": "40.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.368Z",
+      "updated_at": "2025-09-10T19:48:22.253Z",
+      "precio_compra": "1.00",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 20,
+    "fields": {
+      "sku": "FKR2-04",
+      "nombre": "Ferrul R2 1/4",
+      "descripcion": "Férula R2 para manguera de 1/4 pulgada",
+      "precio": "3.00",
+      "stock": "140.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.372Z",
+      "updated_at": "2025-09-10T20:17:20.743Z",
+      "precio_compra": "0.48",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 21,
+    "fields": {
+      "sku": "FKR2-06",
+      "nombre": "Ferrul R2 3/8",
+      "descripcion": "Férula R2 para manguera de 3/8 pulgada",
+      "precio": "4.00",
+      "stock": "140.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.375Z",
+      "updated_at": "2025-09-10T20:17:49.146Z",
+      "precio_compra": "0.68",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 22,
+    "fields": {
+      "sku": "FKR2-08",
+      "nombre": "Ferrul R2 1/2",
+      "descripcion": "Férula R2 para manguera de 1/2 pulgada",
+      "precio": "5.00",
+      "stock": "150.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.379Z",
+      "updated_at": "2025-09-10T20:10:59.287Z",
+      "precio_compra": "1.10",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 23,
+    "fields": {
+      "sku": "FKR2-10",
+      "nombre": "Ferrul R2 5/8",
+      "descripcion": "Férula R2 para manguera de 5/8 pulgada",
+      "precio": "6.00",
+      "stock": "140.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.382Z",
+      "updated_at": "2025-09-10T20:12:08.043Z",
+      "precio_compra": "1.63",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 24,
+    "fields": {
+      "sku": "FKR2-12",
+      "nombre": "Ferrul R2 3/4",
+      "descripcion": "Férula R2 para manguera de 3/4 pulgada",
+      "precio": "8.00",
+      "stock": "120.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.385Z",
+      "updated_at": "2025-09-10T20:13:16.428Z",
+      "precio_compra": "1.81",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 25,
+    "fields": {
+      "sku": "FKR2-16",
+      "nombre": "Ferrul R2 1\"",
+      "descripcion": "Férula R2 para manguera de 1 pulgada",
+      "precio": "10.00",
+      "stock": "40.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.388Z",
+      "updated_at": "2025-09-10T20:14:25.343Z",
+      "precio_compra": "2.74",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 26,
+    "fields": {
+      "sku": "FKR2-20",
+      "nombre": "Ferrul R2 1 1/4",
+      "descripcion": "Férula R2 para manguera de 1¼ pulgada",
+      "precio": "15.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.391Z",
+      "updated_at": "2025-09-10T20:16:08.579Z",
+      "precio_compra": "4.72",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 27,
+    "fields": {
+      "sku": "FKR12-08",
+      "nombre": "Ferrul R12 1/2",
+      "descripcion": "Férula R12 para manguera de 1/2 pulgada",
+      "precio": "8.00",
+      "stock": "110.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.394Z",
+      "updated_at": "2025-09-10T19:50:11.058Z",
+      "precio_compra": "1.54",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 28,
+    "fields": {
+      "sku": "FKR12-10",
+      "nombre": "Ferrul R12 5/8",
+      "descripcion": "Férula R12 para manguera de 5/8 pulgada",
+      "precio": "10.00",
+      "stock": "40.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.397Z",
+      "updated_at": "2025-09-10T19:51:04.896Z",
+      "precio_compra": "2.23",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 29,
+    "fields": {
+      "sku": "FKR12-12",
+      "nombre": "Ferrul R12 3/4",
+      "descripcion": "Férula R12 para manguera de 3/4 pulgada",
+      "precio": "12.00",
+      "stock": "150.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.401Z",
+      "updated_at": "2025-09-10T19:52:23.990Z",
+      "precio_compra": "2.05",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 30,
+    "fields": {
+      "sku": "FKR12-16",
+      "nombre": "Ferrul R12 1\"",
+      "descripcion": "Férula R12 para manguera de 1 pulgada",
+      "precio": "15.00",
+      "stock": "160.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.404Z",
+      "updated_at": "2025-09-10T19:53:29.197Z",
+      "precio_compra": "3.52",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 31,
+    "fields": {
+      "sku": "FKR12-20",
+      "nombre": "Ferrul R12 1 1/4",
+      "descripcion": "Férula R12 para manguera de 1¼ pulgada",
+      "precio": "20.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.408Z",
+      "updated_at": "2025-09-10T19:54:40.742Z",
+      "precio_compra": "5.59",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 32,
+    "fields": {
+      "sku": "FKR13-16",
+      "nombre": "Ferrul R13 1\"",
+      "descripcion": "Férula R13 para manguera de 1 pulgada",
+      "precio": "22.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.411Z",
+      "updated_at": "2025-09-10T19:59:30.847Z",
+      "precio_compra": "4.80",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 33,
+    "fields": {
+      "sku": "CNJ-0404",
+      "nombre": "Conexion NJ 04x04",
+      "descripcion": "Conexión hidráulica NJ 04x04",
+      "precio": "6.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.414Z",
+      "updated_at": "2025-09-10T18:56:18.816Z",
+      "precio_compra": "1.30",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 34,
+    "fields": {
+      "sku": "CNJ-0405",
+      "nombre": "Conexion NJ 04x05",
+      "descripcion": "Conexión hidráulica NJ 04x05",
+      "precio": "6.00",
+      "stock": "30.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.417Z",
+      "updated_at": "2025-09-10T18:57:25.401Z",
+      "precio_compra": "1.40",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 35,
+    "fields": {
+      "sku": "CNJ-0406",
+      "nombre": "Conexion NJ 04x06",
+      "descripcion": "Conexión hidráulica NJ 04x06",
+      "precio": "6.00",
+      "stock": "30.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.420Z",
+      "updated_at": "2025-09-10T18:58:05.942Z",
+      "precio_compra": "1.48",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 36,
+    "fields": {
+      "sku": "CNJ-0606",
+      "nombre": "Conexion NJ 06x06",
+      "descripcion": "Conexión hidráulica NJ 06x06",
+      "precio": "7.00",
+      "stock": "60.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.423Z",
+      "updated_at": "2025-09-10T18:58:37.442Z",
+      "precio_compra": "1.80",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 37,
+    "fields": {
+      "sku": "CNJ-0608",
+      "nombre": "Conexion NJ 06x08",
+      "descripcion": "Conexión hidráulica NJ 06x08",
+      "precio": "8.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.426Z",
+      "updated_at": "2025-09-10T18:59:16.070Z",
+      "precio_compra": "2.30",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 38,
+    "fields": {
+      "sku": "CNJ-0808",
+      "nombre": "Conexion NJ 08x08",
+      "descripcion": "Conexión hidráulica NJ 08x08",
+      "precio": "10.00",
+      "stock": "110.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.429Z",
+      "updated_at": "2025-09-10T19:00:17.052Z",
+      "precio_compra": "1.84",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 39,
+    "fields": {
+      "sku": "CNJ-0810",
+      "nombre": "Conexion NJ 08x10",
+      "descripcion": "Conexión hidráulica NJ 08x10",
+      "precio": "10.00",
+      "stock": "30.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.432Z",
+      "updated_at": "2025-09-10T19:00:49.484Z",
+      "precio_compra": "2.92",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 40,
+    "fields": {
+      "sku": "CNJ-1010",
+      "nombre": "Conexion NJ 10x10",
+      "descripcion": "Conexión hidráulica NJ 10x10",
+      "precio": "12.00",
+      "stock": "50.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.435Z",
+      "updated_at": "2025-09-10T19:01:24.383Z",
+      "precio_compra": "3.50",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 41,
+    "fields": {
+      "sku": "CNJ-1012",
+      "nombre": "Conexion NJ 10x12",
+      "descripcion": "Conexión hidráulica NJ 10x12",
+      "precio": "13.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.438Z",
+      "updated_at": "2025-09-10T19:01:47.603Z",
+      "precio_compra": "4.57",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 42,
+    "fields": {
+      "sku": "CNJ-1212",
+      "nombre": "Conexion NJ 12x12",
+      "descripcion": "Conexión hidráulica NJ 12x12",
+      "precio": "15.00",
+      "stock": "130.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.441Z",
+      "updated_at": "2025-09-10T19:02:25.099Z",
+      "precio_compra": "4.50",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 43,
+    "fields": {
+      "sku": "CNJ-1616",
+      "nombre": "Conexion NJ 16x16",
+      "descripcion": "Conexión hidráulica NJ 16x16",
+      "precio": "20.00",
+      "stock": "50.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.444Z",
+      "updated_at": "2025-09-10T19:02:48.060Z",
+      "precio_compra": "6.12",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 44,
+    "fields": {
+      "sku": "CNJ-2020",
+      "nombre": "Conexion NJ 20x20",
+      "descripcion": "Conexión hidráulica NJ 20x20",
+      "precio": "25.00",
+      "stock": "10.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.446Z",
+      "updated_at": "2025-09-10T19:04:33.179Z",
+      "precio_compra": "11.11",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 45,
+    "fields": {
+      "sku": "CNJ45-0404",
+      "nombre": "Conexion NJ45° 04x04",
+      "descripcion": "Conexión hidráulica NJ 45° 04x04",
+      "precio": "8.00",
+      "stock": "10.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.449Z",
+      "updated_at": "2025-09-10T19:05:26.551Z",
+      "precio_compra": "3.21",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 46,
+    "fields": {
+      "sku": "CNJ45-0405",
+      "nombre": "Conexion NJ45° 04x05",
+      "descripcion": "Conexión hidráulica NJ 45° 04x05",
+      "precio": "8.00",
+      "stock": "10.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.452Z",
+      "updated_at": "2025-09-10T19:06:08.008Z",
+      "precio_compra": "3.30",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 47,
+    "fields": {
+      "sku": "CNJ45-0406",
+      "nombre": "Conexion NJ45° 04x06",
+      "descripcion": "Conexión hidráulica NJ 45° 04x06",
+      "precio": "8.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.455Z",
+      "updated_at": "2025-09-10T19:06:54.504Z",
+      "precio_compra": "3.41",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 48,
+    "fields": {
+      "sku": "CNJ45-0606",
+      "nombre": "Conexion NJ45° 06x06",
+      "descripcion": "Conexión hidráulica NJ 45° 06x06",
+      "precio": "10.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.458Z",
+      "updated_at": "2025-09-10T19:07:18.728Z",
+      "precio_compra": "3.59",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 49,
+    "fields": {
+      "sku": "CNJ45-0608",
+      "nombre": "Conexion NJ45° 06x08",
+      "descripcion": "Conexión hidráulica NJ 45° 06x08",
+      "precio": "10.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.462Z",
+      "updated_at": "2025-09-10T19:07:47.783Z",
+      "precio_compra": "4.00",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 50,
+    "fields": {
+      "sku": "CNJ45-0808",
+      "nombre": "Conexion NJ45° 08x08",
+      "descripcion": "Conexión hidráulica NJ 45° 08x08",
+      "precio": "12.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.466Z",
+      "updated_at": "2025-09-10T19:08:17.848Z",
+      "precio_compra": "4.60",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 51,
+    "fields": {
+      "sku": "CNJ90-0404",
+      "nombre": "Conexion NJ90° 04x04",
+      "descripcion": "Conexión hidráulica NJ 90° 04x04",
+      "precio": "8.00",
+      "stock": "10.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.469Z",
+      "updated_at": "2025-09-10T19:08:50.961Z",
+      "precio_compra": "3.21",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 52,
+    "fields": {
+      "sku": "CNJ90-0606",
+      "nombre": "Conexion NJ90° 06x06",
+      "descripcion": "Conexión hidráulica NJ 90° 06x06",
+      "precio": "10.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.474Z",
+      "updated_at": "2025-09-10T19:09:29.965Z",
+      "precio_compra": "2.63",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 53,
+    "fields": {
+      "sku": "CNJ90-0808",
+      "nombre": "Conexion NJ90° 08x08",
+      "descripcion": "Conexión hidráulica NJ 90° 08x08",
+      "precio": "12.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.477Z",
+      "updated_at": "2025-09-10T19:10:25.257Z",
+      "precio_compra": "4.70",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 54,
+    "fields": {
+      "sku": "COFT-0404",
+      "nombre": "Conexion OFT 04x04",
+      "descripcion": "Conexión hidráulica OFT 04x04",
+      "precio": "6.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.480Z",
+      "updated_at": "2025-09-10T19:11:37.500Z",
+      "precio_compra": "1.60",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 55,
+    "fields": {
+      "sku": "COFT-0406",
+      "nombre": "Conexion OFT 04x06",
+      "descripcion": "Conexión hidráulica OFT 04x06",
+      "precio": "6.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.484Z",
+      "updated_at": "2025-09-10T19:30:34.956Z",
+      "precio_compra": "1.80",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 56,
+    "fields": {
+      "sku": "COFT-0606",
+      "nombre": "Conexion OFT 06x06",
+      "descripcion": "Conexión hidráulica OFT 06x06",
+      "precio": "8.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.487Z",
+      "updated_at": "2025-09-10T19:16:23.292Z",
+      "precio_compra": "2.20",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 57,
+    "fields": {
+      "sku": "COFT-0808",
+      "nombre": "Conexion OFT 08x08",
+      "descripcion": "Conexión hidráulica OFT 08x08",
+      "precio": "10.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.491Z",
+      "updated_at": "2025-09-10T19:18:09.516Z",
+      "precio_compra": "2.85",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 58,
+    "fields": {
+      "sku": "COFT-1010",
+      "nombre": "Conexion OFT 10x10",
+      "descripcion": "Conexión hidráulica OFT 10x10",
+      "precio": "12.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.495Z",
+      "updated_at": "2025-09-10T19:18:41.373Z",
+      "precio_compra": "4.03",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 59,
+    "fields": {
+      "sku": "COFT-1212",
+      "nombre": "Conexion OFT 12x12",
+      "descripcion": "Conexión hidráulica OFT 12x12",
+      "precio": "15.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.502Z",
+      "updated_at": "2025-09-10T19:19:09.761Z",
+      "precio_compra": "4.78",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 60,
+    "fields": {
+      "sku": "COFT-1616",
+      "nombre": "Conexion OFT 16x16",
+      "descripcion": "Conexión hidráulica OFT 16x16",
+      "precio": "22.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.506Z",
+      "updated_at": "2025-09-10T19:19:40.086Z",
+      "precio_compra": "8.20",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 61,
+    "fields": {
+      "sku": "COFT45-0404",
+      "nombre": "Conexion OFT45° 04x04",
+      "descripcion": "Conexión hidráulica OFT 45° 04x04",
+      "precio": "8.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.510Z",
+      "updated_at": "2025-09-10T19:20:15.538Z",
+      "precio_compra": "2.80",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 62,
+    "fields": {
+      "sku": "COFT45-0606",
+      "nombre": "Conexion OFT45° 06x06",
+      "descripcion": "Conexión hidráulica OFT 45° 06x06",
+      "precio": "10.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.514Z",
+      "updated_at": "2025-09-10T19:21:13.631Z",
+      "precio_compra": "3.80",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 63,
+    "fields": {
+      "sku": "COFT90-0808",
+      "nombre": "Conexion OFT90° 08x08",
+      "descripcion": "Conexión hidráulica OFT 90° 08x08",
+      "precio": "13.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.518Z",
+      "updated_at": "2025-09-10T19:22:30.743Z",
+      "precio_compra": "4.60",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 64,
+    "fields": {
+      "sku": "COFT90-1010",
+      "nombre": "Conexion OFT90° 10x10",
+      "descripcion": "Conexión hidráulica OFT 90° 10x10",
+      "precio": "15.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.523Z",
+      "updated_at": "2025-09-10T19:24:40.190Z",
+      "precio_compra": "7.65",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 65,
+    "fields": {
+      "sku": "CMB-0402",
+      "nombre": "Conexion MB 04x02",
+      "descripcion": "Conexión hidráulica MB 04x02",
+      "precio": "5.00",
+      "stock": "13.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.527Z",
+      "updated_at": "2025-09-10T16:23:31.524Z",
+      "precio_compra": "1.30",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 66,
+    "fields": {
+      "sku": "CMB-0404",
+      "nombre": "Conexion MB 04x04",
+      "descripcion": "Conexión hidráulica MB 04x04",
+      "precio": "5.00",
+      "stock": "10.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.531Z",
+      "updated_at": "2025-09-10T16:22:43.173Z",
+      "precio_compra": "1.30",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 67,
+    "fields": {
+      "sku": "CMB-0406",
+      "nombre": "Conexion MB 04x06",
+      "descripcion": "Conexión hidráulica MB 04x06",
+      "precio": "5.00",
+      "stock": "10.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.536Z",
+      "updated_at": "2025-09-10T16:24:03.746Z",
+      "precio_compra": "1.40",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 68,
+    "fields": {
+      "sku": "CMJ-0606",
+      "nombre": "Conexion MJ 06x06",
+      "descripcion": "Conexión hidráulica MJ 06x06",
+      "precio": "6.00",
+      "stock": "10.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.541Z",
+      "updated_at": "2025-09-10T16:24:41.756Z",
+      "precio_compra": "1.80",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 69,
+    "fields": {
+      "sku": "CMJ-0808",
+      "nombre": "Conexion MJ 08x08",
+      "descripcion": "Conexión hidráulica MJ 08x08",
+      "precio": "8.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.545Z",
+      "updated_at": "2025-09-10T16:25:18.514Z",
+      "precio_compra": "2.30",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 70,
+    "fields": {
+      "sku": "CMJ-1010",
+      "nombre": "Conexion MJ 10x10",
+      "descripcion": "Conexión hidráulica MJ 10x10",
+      "precio": "10.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.550Z",
+      "updated_at": "2025-09-10T16:25:45.476Z",
+      "precio_compra": "3.00",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 71,
+    "fields": {
+      "sku": "CMJ-1212",
+      "nombre": "Conexion MJ 12x12",
+      "descripcion": "Conexión hidráulica MJ 12x12",
+      "precio": "12.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.555Z",
+      "updated_at": "2025-09-10T18:54:44.996Z",
+      "precio_compra": "7.92",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 72,
+    "fields": {
+      "sku": "CMJ-1616",
+      "nombre": "Conexion MJ 16x16",
+      "descripcion": "Conexión hidráulica MJ 16x16",
+      "precio": "15.00",
+      "stock": "16.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.559Z",
+      "updated_at": "2025-09-10T18:55:51.195Z",
+      "precio_compra": "8.20",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 73,
+    "fields": {
+      "sku": "CORFS-0404",
+      "nombre": "Conexion ORFS MACHO 04x04",
+      "descripcion": "Conexión hidráulica ORFS MACHO 04x04",
+      "precio": "6.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.563Z",
+      "updated_at": "2025-09-10T19:30:00.620Z",
+      "precio_compra": "1.80",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 74,
+    "fields": {
+      "sku": "CORFS-0606",
+      "nombre": "Conexion ORFS MACHO 06x06",
+      "descripcion": "Conexión hidráulica ORFS MACHO 06x06",
+      "precio": "8.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.567Z",
+      "updated_at": "2025-09-10T19:31:47.224Z",
+      "precio_compra": "2.31",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 75,
+    "fields": {
+      "sku": "CORFS-0808",
+      "nombre": "Conexion ORFS MACHO 08x08",
+      "descripcion": "Conexión hidráulica ORFS MACHO 08x08",
+      "precio": "10.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.571Z",
+      "updated_at": "2025-09-10T19:32:11.275Z",
+      "precio_compra": "3.00",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 76,
+    "fields": {
+      "sku": "CORFS-1010",
+      "nombre": "Conexion ORFS MACHO 10x10",
+      "descripcion": "Conexión hidráulica ORFS MACHO 10x10",
+      "precio": "12.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.575Z",
+      "updated_at": "2025-09-10T19:32:41.921Z",
+      "precio_compra": "6.18",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 77,
+    "fields": {
+      "sku": "CORFS-1212",
+      "nombre": "Conexion ORFS MACHO 12x12",
+      "descripcion": "Conexión hidráulica ORFS MACHO 12x12",
+      "precio": "15.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.580Z",
+      "updated_at": "2025-09-10T19:33:48.598Z",
+      "precio_compra": "7.92",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 78,
+    "fields": {
+      "sku": "CORFS-1616",
+      "nombre": "Conexion ORFS MACHO 16x16",
+      "descripcion": "Conexión hidráulica ORFS MACHO 16x16",
+      "precio": "20.00",
+      "stock": "20.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.585Z",
+      "updated_at": "2025-09-10T19:34:10.955Z",
+      "precio_compra": "10.60",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 79,
+    "fields": {
+      "sku": "SALV-04",
+      "nombre": "Espiga soldable 1/4",
+      "descripcion": "Espiga soldable de 1/4 pulgada",
+      "precio": "4.00",
+      "stock": "47.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.590Z",
+      "updated_at": "2025-09-10T19:37:40.176Z",
+      "precio_compra": "1.46",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 80,
+    "fields": {
+      "sku": "SALV-06",
+      "nombre": "Espiga soldable 3/8",
+      "descripcion": "Espiga soldable de 3/8",
+      "precio": "5.00",
+      "stock": "40.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.594Z",
+      "updated_at": "2025-09-10T19:39:26.137Z",
+      "precio_compra": "1.63",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 81,
+    "fields": {
+      "sku": "SALV-08",
+      "nombre": "Espiga soldable 1/2",
+      "descripcion": "Espiga soldable de 1/2",
+      "precio": "5.00",
+      "stock": "40.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.600Z",
+      "updated_at": "2025-09-10T19:40:06.502Z",
+      "precio_compra": "1.81",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 82,
+    "fields": {
+      "sku": "SALV-10",
+      "nombre": "Espiga soldable 5/8",
+      "descripcion": "Espiga soldable de 5/8",
+      "precio": "6.00",
+      "stock": "40.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.604Z",
+      "updated_at": "2025-09-10T19:40:43.913Z",
+      "precio_compra": "2.23",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 83,
+    "fields": {
+      "sku": "SALV-12",
+      "nombre": "Espiga soldable 3/4",
+      "descripcion": "Espiga soldable de 3/4 pulgada",
+      "precio": "8.00",
+      "stock": "40.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.609Z",
+      "updated_at": "2025-09-10T19:41:12.917Z",
+      "precio_compra": "2.91",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 84,
+    "fields": {
+      "sku": "SALV-16",
+      "nombre": "Espiga soldable 1\"",
+      "descripcion": "Espiga soldable de 1 pulgada",
+      "precio": "12.00",
+      "stock": "40.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.613Z",
+      "updated_at": "2025-09-10T19:41:48.443Z",
+      "precio_compra": "4.62",
+      "unidad_medida": 5
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 85,
+    "fields": {
+      "sku": "E-6011",
+      "nombre": "Electrodo 6011",
+      "descripcion": "Electrodo para soldadura 6011",
+      "precio": "1.00",
+      "stock": "0.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.617Z",
+      "updated_at": "2025-09-10T19:34:29.652Z",
+      "precio_compra": "0.70",
+      "unidad_medida": 3
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 86,
+    "fields": {
+      "sku": "E-6013",
+      "nombre": "ELECTRODO 6013 1/8 WEST ARCO",
+      "descripcion": "Electrodo para soldadura 6013 1/8 WEST ARCO",
+      "precio": "7.00",
+      "stock": "50.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.621Z",
+      "updated_at": "2025-09-10T19:35:20.255Z",
+      "precio_compra": "4.00",
+      "unidad_medida": 3
+    }
+  },
+  {
+    "model": "black_invoices.producto",
+    "pk": 87,
+    "fields": {
+      "sku": "E-7018",
+      "nombre": "ELECTRODO 7018 1/8 WEST ARCO",
+      "descripcion": "Electrodo para soldadura 7018 1/8 WEST ARCO",
+      "precio": "7.50",
+      "stock": "50.000",
+      "activo": true,
+      "created_at": "2025-09-10T05:57:33.625Z",
+      "updated_at": "2025-09-10T19:36:00.045Z",
+      "precio_compra": "4.50",
+      "unidad_medida": 3
+    }
+  },
+  {
+    "model": "black_invoices.empleado",
+    "pk": 1,
+    "fields": {
+      "user": null,
+      "cedula": "V00000000",
+      "nombre": "Administrador",
+      "apellido": "Dev",
+      "email": null,
+      "telefono": null,
+      "direccion": "",
+      "nivel_acceso": 2,
+      "fecha_contratacion": "2025-09-10",
+      "activo": true
+    }
+  },
+  {
+    "model": "black_invoices.empleado",
+    "pk": 2,
+    "fields": {
+      "user": null,
+      "cedula": "V14566666",
+      "nombre": "Administrador",
+      "apellido": "1",
+      "email": null,
+      "telefono": null,
+      "direccion": "",
+      "nivel_acceso": 2,
+      "fecha_contratacion": "2025-09-10",
+      "activo": true
+    }
+  },
+  {
+    "model": "black_invoices.empleado",
+    "pk": 3,
+    "fields": {
+      "user": null,
+      "cedula": "V17824858",
+      "nombre": "Secretaria",
+      "apellido": "1",
+      "email": null,
+      "telefono": null,
+      "direccion": "",
+      "nivel_acceso": 3,
+      "fecha_contratacion": "2025-09-10",
+      "activo": true
+    }
+  },
+  {
+    "model": "black_invoices.unidadmedida",
+    "pk": 1,
+    "fields": {
+      "nombre": "Metros",
+      "abreviatura": "m",
+      "descripcion": "Medida lineal para mangueras y cables",
+      "permite_decimales": true,
+      "activo": true,
+      "created_at": "2025-09-10T05:57:11.761Z"
+    }
+  },
+  {
+    "model": "black_invoices.unidadmedida",
+    "pk": 2,
+    "fields": {
+      "nombre": "Centímetros",
+      "abreviatura": "cm",
+      "descripcion": "Medida lineal pequeña",
+      "permite_decimales": true,
+      "activo": true,
+      "created_at": "2025-09-10T05:57:11.767Z"
+    }
+  },
+  {
+    "model": "black_invoices.unidadmedida",
+    "pk": 3,
+    "fields": {
+      "nombre": "Kilogramos",
+      "abreviatura": "kg",
+      "descripcion": "Medida de peso para electrodos y materiales",
+      "permite_decimales": true,
+      "activo": true,
+      "created_at": "2025-09-10T05:57:11.768Z"
+    }
+  },
+  {
+    "model": "black_invoices.unidadmedida",
+    "pk": 4,
+    "fields": {
+      "nombre": "Gramos",
+      "abreviatura": "g",
+      "descripcion": "Medida de peso pequeña",
+      "permite_decimales": true,
+      "activo": true,
+      "created_at": "2025-09-10T05:57:11.769Z"
+    }
+  },
+  {
+    "model": "black_invoices.unidadmedida",
+    "pk": 5,
+    "fields": {
+      "nombre": "Unidades",
+      "abreviatura": "un",
+      "descripcion": "Para productos que se venden por pieza",
+      "permite_decimales": false,
+      "activo": true,
+      "created_at": "2025-09-10T05:57:11.770Z"
+    }
+  },
+  {
+    "model": "black_invoices.unidadmedida",
+    "pk": 6,
+    "fields": {
+      "nombre": "Pares",
+      "abreviatura": "par",
+      "descripcion": "Para productos que se venden en pares",
+      "permite_decimales": false,
+      "activo": true,
+      "created_at": "2025-09-10T05:57:11.771Z"
+    }
+  },
+  {
+    "model": "black_invoices.unidadmedida",
+    "pk": 7,
+    "fields": {
+      "nombre": "Juegos",
+      "abreviatura": "jgo",
+      "descripcion": "Para productos que se venden en juegos o sets",
+      "permite_decimales": false,
+      "activo": true,
+      "created_at": "2025-09-10T05:57:11.773Z"
+    }
+  },
+  {
+    "model": "black_invoices.unidadmedida",
+    "pk": 8,
+    "fields": {
+      "nombre": "Rollos",
+      "abreviatura": "rllo",
+      "descripcion": "Para mangueras vendidas en rollos",
+      "permite_decimales": false,
+      "activo": true,
+      "created_at": "2025-09-10T05:57:11.774Z"
+    }
+  },
+  {
+    "model": "black_invoices.tasacambio",
+    "pk": 1,
+    "fields": {
+      "fecha": "2025-09-10",
+      "tasa_usd_ves": "156.3700",
+      "fuente": "Manual - Inicial",
+      "created_at": "2025-09-10T05:57:11.778Z",
+      "activo": true
+    }
+  },
+  {
+    "model": "black_invoices.configuracionsistema",
+    "pk": 1,
+    "fields": {
+      "nombre_empresa": "CORPORACION AGRICOLA DOÑA CLARA, C.A.",
+      "rif_empresa": "J-40723051-4",
+      "direccion_empresa": "Vda. 18 Casa Nro 48 Urb. Francisco de Miranda Guanare Edo. Portuguesa",
+      "telefono_empresa": "0424-5439427 / 0424-5874882 / 0257-2532558",
+      "porcentaje_iva": "16.00",
+      "aplicar_iva": true,
+      "numero_factura_actual": 1,
+      "numero_nota_entrega_actual": 1,
+      "api_tasa_activa": true,
+      "api_tasa_url": "https://api.exchangerate-api.com/v4/latest/USD",
+      "created_at": "2025-09-10T16:11:43.433Z",
+      "updated_at": "2025-09-10T16:11:43.433Z"
+    }
+  }
+]
