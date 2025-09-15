@@ -1538,7 +1538,7 @@ class FacturaPDFView(LoginRequiredMixin, View):
         first_page_available_space = first_page_table_start - 220
         
         # Espacio disponible en páginas subsecuentes (solo header básico)
-        other_pages_table_start = height - 200
+        other_pages_table_start = height - 230  # Aumentado de 200 a 230 para dar más espacio
         # RESERVAR ESPACIO para footer (100 puntos para asegurar que no se superponga)
         other_pages_available_space = other_pages_table_start - 100
         
@@ -1597,14 +1597,13 @@ class FacturaPDFView(LoginRequiredMixin, View):
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
                 ('GRID', (0, 0), (-1, -2 if is_last_page else -1), 0.5, colors.black),
                 ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('ALIGN', (3, 1), (7, -1), 'RIGHT'),
-                ('ALIGN', (6, 1), (6, -2 if is_last_page else -1), 'RIGHT'),
+                ('ALIGN', (3, 1), (6, -1), 'RIGHT'),
             ]))
             
             if is_last_page:
                 table.setStyle(TableStyle([
-                    ('LINEABOVE', (6, -1), (7, -1), 0.5, colors.black),
-                    ('FONTNAME', (6, -1), (7, -1), 'Helvetica-Bold'),
+                    ('LINEABOVE', (5, -1), (6, -1), 0.5, colors.black),
+                    ('FONTNAME', (5, -1), (6, -1), 'Helvetica-Bold'),
                 ], add=True))
             
             # Posición de la tabla según la página
@@ -1779,7 +1778,7 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
 
         def draw_table_header():
             """Retorna el header de la tabla como lista"""
-            return ["#", "Código", "Producto", "Cant.", "Unidad", "Precio", "Precio Bs", "Total"]
+            return ["#", "Código", "Producto", "Cant.", "Unidad", "Precio", "Total"]
 
         # --- Preparar datos de productos ---
         detalles = nota.detalles_nota.all()
@@ -1788,7 +1787,6 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
         for idx, detalle in enumerate(detalles, 1):
             codigo = detalle.producto.sku or str(detalle.producto.id)
             unidad = detalle.producto.unidad_medida.abreviatura if detalle.producto.unidad_medida else "UN"
-            precio_bs = detalle.precio_unitario * tasa_usd_ves
             
             productos_data.append([
                 str(idx),
@@ -1797,7 +1795,6 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
                 str(detalle.cantidad),
                 unidad,
                 f"${detalle.precio_unitario:,.2f}",
-                f"{precio_bs:,.2f}",
                 f"${detalle.subtotal_linea:,.2f}"
             ])
 
@@ -1849,10 +1846,10 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
             # Solo añadir totales en la última página
             is_last_page = page_num == len(product_pages)
             if is_last_page:
-                table_data.append(["", "", "", "", "", "", "TOTAL", f"${nota.total:,.2f}"])
+                table_data.append(["", "", "", "", "", "TOTAL", f"${nota.total:,.2f}"])
             
             # Crear tabla
-            table = Table(table_data, colWidths=[25, 60, 160, 40, 40, 60, 60, 60])
+            table = Table(table_data, colWidths=[25, 60, 180, 40, 40, 80, 80])
             table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
@@ -1862,14 +1859,13 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
                 ('GRID', (0, 0), (-1, -2 if is_last_page else -1), 0.5, colors.black),
                 ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('ALIGN', (3, 1), (7, -1), 'RIGHT'),
-                ('ALIGN', (6, 1), (6, -2 if is_last_page else -1), 'RIGHT'),
+                ('ALIGN', (3, 1), (6, -1), 'RIGHT'),
             ]))
             
             if is_last_page:
                 table.setStyle(TableStyle([
-                    ('LINEABOVE', (6, -1), (7, -1), 0.5, colors.black),
-                    ('FONTNAME', (6, -1), (7, -1), 'Helvetica-Bold'),
+                    ('LINEABOVE', (5, -1), (6, -1), 0.5, colors.black),
+                    ('FONTNAME', (5, -1), (6, -1), 'Helvetica-Bold'),
                 ], add=True))
             
             # Posición de la tabla
@@ -1890,25 +1886,19 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
                 # Verificar espacio para totales
                 if totals_y > 120:
                     # --- Totales ---
-                    p.setFont("Helvetica", 8)
-                    subtotal_bs = nota.subtotal * tasa_usd_ves
-                    iva_bs = nota.iva * tasa_usd_ves
-                    total_bs = nota.total * tasa_usd_ves
+                    p.setFont("Helvetica", 10)
+                    
+                    p.drawString(450, totals_y, "SUBTOTAL")
+                    p.drawString(520, totals_y, f"${nota.subtotal:,.2f}")
 
-                    p.drawString(430, totals_y, "SUBTOTAL")
-                    p.drawString(500, totals_y, f"${nota.subtotal:,.2f}")
-                    p.drawString(550, totals_y, f"{subtotal_bs:,.2f} Bs")
+                    p.drawString(450, totals_y - 15, f"IVA ({config.porcentaje_iva}%)")
+                    p.drawString(520, totals_y - 15, f"${nota.iva:,.2f}")
 
-                    p.drawString(430, totals_y - 10, f"IVA ({config.porcentaje_iva}%)")
-                    p.drawString(500, totals_y - 10, f"${nota.iva:,.2f}")
-                    p.drawString(550, totals_y - 10, f"{iva_bs:,.2f} Bs")
+                    p.line(450, totals_y - 20, 580, totals_y - 20)
 
-                    p.line(430, totals_y - 15, 580, totals_y - 15)
-
-                    p.setFont("Helvetica-Bold", 9)
-                    p.drawString(430, totals_y - 30, "TOTAL")
-                    p.drawString(500, totals_y - 30, f"${nota.total:,.2f}")
-                    p.drawString(550, totals_y - 30, f"{total_bs:,.2f} Bs")
+                    p.setFont("Helvetica-Bold", 11)
+                    p.drawString(450, totals_y - 35, "TOTAL")
+                    p.drawString(520, totals_y - 35, f"${nota.total:,.2f}")
 
                     # --- Nota importante ---
                     notes_y = totals_y - 70
@@ -1922,25 +1912,19 @@ class NotaEntregaPDFView(LoginRequiredMixin, View):
                     draw_header(page_num, total_pages)
                     
                     totals_y = height - 200
-                    p.setFont("Helvetica", 8)
-                    subtotal_bs = nota.subtotal * tasa_usd_ves
-                    iva_bs = nota.iva * tasa_usd_ves
-                    total_bs = nota.total * tasa_usd_ves
+                    p.setFont("Helvetica", 10)
+                    
+                    p.drawString(450, totals_y, "SUBTOTAL")
+                    p.drawString(520, totals_y, f"${nota.subtotal:,.2f}")
 
-                    p.drawString(430, totals_y, "SUBTOTAL")
-                    p.drawString(500, totals_y, f"${nota.subtotal:,.2f}")
-                    p.drawString(550, totals_y, f"{subtotal_bs:,.2f} Bs")
+                    p.drawString(450, totals_y - 15, f"IVA ({config.porcentaje_iva}%)")
+                    p.drawString(520, totals_y - 15, f"${nota.iva:,.2f}")
 
-                    p.drawString(430, totals_y - 10, f"IVA ({config.porcentaje_iva}%)")
-                    p.drawString(500, totals_y - 10, f"${nota.iva:,.2f}")
-                    p.drawString(550, totals_y - 10, f"{iva_bs:,.2f} Bs")
+                    p.line(450, totals_y - 20, 580, totals_y - 20)
 
-                    p.line(430, totals_y - 15, 580, totals_y - 15)
-
-                    p.setFont("Helvetica-Bold", 9)
-                    p.drawString(430, totals_y - 30, "TOTAL")
-                    p.drawString(500, totals_y - 30, f"${nota.total:,.2f}")
-                    p.drawString(550, totals_y - 30, f"{total_bs:,.2f} Bs")
+                    p.setFont("Helvetica-Bold", 11)
+                    p.drawString(450, totals_y - 35, "TOTAL")
+                    p.drawString(520, totals_y - 35, f"${nota.total:,.2f}")
 
                     p.setFont("Helvetica", 8)
                     nota_texto = "NOTA IMPORTANTE: Este documento es una NOTA DE ENTREGA. La Factura Fiscal se generará al completar el pago."
