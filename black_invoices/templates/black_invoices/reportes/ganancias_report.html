@@ -1,0 +1,269 @@
+{% extends 'black_invoices/base/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-chart-line"></i> {{ titulo }}
+                    </h3>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-success btn-sm" onclick="window.print()">
+                            <i class="fas fa-print"></i> Imprimir
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#filtrosModal">
+                            <i class="fas fa-filter"></i> Filtros
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Resumen de período -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <div class="alert alert-info">
+                                <i class="fas fa-calendar"></i> 
+                                <strong>Período:</strong> {{ fecha_inicio|date:"d/m/Y" }} - {{ fecha_fin|date:"d/m/Y" }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tarjetas de resumen -->
+                    <div class="row">
+                        <div class="col-lg-3 col-6">
+                            <div class="small-box bg-success">
+                                <div class="inner">
+                                    <h3>${{ total_ganancias_realizadas|floatformat:2 }}</h3>
+                                    <p>Ganancias Realizadas</p>
+                                </div>
+                                <div class="icon">
+                                    <i class="fas fa-dollar-sign"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="small-box bg-warning">
+                                <div class="inner">
+                                    <h3>${{ total_ganancias_pendientes|floatformat:2 }}</h3>
+                                    <p>Ganancias Pendientes</p>
+                                </div>
+                                <div class="icon">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="small-box bg-info">
+                                <div class="inner">
+                                    <h3>${{ total_ganancias_combinadas|floatformat:2 }}</h3>
+                                    <p>Total Ganancias</p>
+                                </div>
+                                <div class="icon">
+                                    <i class="fas fa-chart-pie"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="small-box bg-primary">
+                                <div class="inner">
+                                    {% if total_ganancias_combinadas > 0 %}
+                                        <h3>{{ total_ganancias_realizadas|mul:100|div:total_ganancias_combinadas|floatformat:1 }}%</h3>
+                                    {% else %}
+                                        <h3>0%</h3>
+                                    {% endif %}
+                                    <p>% Realizadas</p>
+                                </div>
+                                <div class="icon">
+                                    <i class="fas fa-percentage"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gráfico de distribución -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Distribución por Tipo de Venta</h5>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="chartTipoVenta" width="400" height="200"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Ganancias por Empleado</h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if ganancias_por_empleado %}
+                                        <div class="table-responsive">
+                                            <table class="table table-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Empleado</th>
+                                                        <th>Ganancia</th>
+                                                        <th>Ventas</th>
+                                                        <th>Margen Avg</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for empleado in ganancias_por_empleado %}
+                                                    <tr>
+                                                        <td>{{ empleado.venta__empleado__nombre }} {{ empleado.venta__empleado__apellido }}</td>
+                                                        <td><span class="badge badge-success">${{ empleado.total_ganancia|floatformat:2 }}</span></td>
+                                                        <td>{{ empleado.total_ventas }}</td>
+                                                        <td>{{ empleado.margen_promedio|floatformat:1 }}%</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    {% else %}
+                                        <p class="text-muted">No hay datos de empleados para este período.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de ganancias por producto -->
+                    <div class="row mt-4">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Top Productos por Ganancia</h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if ganancias_por_producto %}
+                                        <div class="table-responsive">
+                                            <table class="table table-striped" id="tablaGanancias">
+                                                <thead>
+                                                    <tr>
+                                                        <th>#</th>
+                                                        <th>Producto</th>
+                                                        <th>Ganancia Total</th>
+                                                        <th>Cantidad Vendida</th>
+                                                        <th>Margen Promedio</th>
+                                                        <th>Ganancia por Unidad</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for producto in ganancias_por_producto %}
+                                                    <tr>
+                                                        <td>{{ forloop.counter }}</td>
+                                                        <td>
+                                                            <strong>{{ producto.producto__nombre }}</strong>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge badge-success badge-lg">
+                                                                ${{ producto.total_ganancia|floatformat:2 }}
+                                                            </span>
+                                                        </td>
+                                                        <td>{{ producto.total_cantidad|floatformat:2 }}</td>
+                                                        <td>
+                                                            <span class="badge badge-info">
+                                                                {{ producto.margen_promedio|floatformat:1 }}%
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            ${{ producto.total_ganancia|div:producto.total_cantidad|floatformat:2 }}
+                                                        </td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    {% else %}
+                                        <div class="alert alert-warning">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            No hay datos de ganancias para el período seleccionado.
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de filtros -->
+<div class="modal fade" id="filtrosModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Filtros de Fecha</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <form method="get">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Fecha Inicio:</label>
+                        <input type="date" name="fecha_inicio" class="form-control" 
+                               value="{{ fecha_inicio|date:'Y-m-d' }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha Fin:</label>
+                        <input type="date" name="fecha_fin" class="form-control" 
+                               value="{{ fecha_fin|date:'Y-m-d' }}">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Aplicar Filtros</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+$(document).ready(function() {
+    // Inicializar DataTable
+    $('#tablaGanancias').DataTable({
+        "language": {
+            "url": "//cdn.datatables.net/plug-ins/1.10.24/i18n/Spanish.json"
+        },
+        "order": [[ 2, "desc" ]], // Ordenar por ganancia total
+        "pageLength": 25
+    });
+
+    // Gráfico de tipo de venta
+    const ctx = document.getElementById('chartTipoVenta').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Contado', 'Crédito'],
+            datasets: [{
+                data: [{{ ganancias_contado }}, {{ ganancias_credito }}],
+                backgroundColor: [
+                    '#28a745',
+                    '#ffc107'
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

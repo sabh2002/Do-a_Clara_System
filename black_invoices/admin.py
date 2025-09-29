@@ -315,3 +315,80 @@ class FacturaAdmin(admin.ModelAdmin):
             config = ConfiguracionSistema.get_config()
             obj.numero_factura = config.get_siguiente_numero_factura()
         super().save_model(request, obj, form, change)
+
+@admin.register(DetalleGanancia)
+class DetalleGananciaAdmin(admin.ModelAdmin):
+    list_display = (
+        'venta', 'producto', 'cantidad', 'precio_venta_unitario', 
+        'precio_compra_unitario', 'ganancia_total', 'margen_porcentaje', 'fecha_venta'
+    )
+    list_filter = ('fecha_venta', 'venta__credito', 'venta__status')
+    search_fields = ('producto__nombre', 'venta__id')
+    readonly_fields = (
+        'ganancia_unitaria', 'ganancia_total', 'margen_porcentaje', 'created_at'
+    )
+    date_hierarchy = 'fecha_venta'
+    ordering = ['-fecha_venta']
+    
+    fieldsets = (
+        ('Información de Venta', {
+            'fields': ('venta', 'producto', 'cantidad', 'fecha_venta')
+        }),
+        ('Precios', {
+            'fields': ('precio_venta_unitario', 'precio_compra_unitario')
+        }),
+        ('Ganancias (Calculadas)', {
+            'fields': ('ganancia_unitaria', 'ganancia_total', 'margen_porcentaje'),
+            'classes': ('collapse',)
+        }),
+        ('Auditoría', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        # Solo se crean automáticamente
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        # Solo lectura
+        return False
+
+@admin.register(VentaHistorial)
+class VentaHistorialAdmin(admin.ModelAdmin):
+    list_display = (
+        'venta', 'usuario_modificacion', 'tipo_modificacion', 
+        'fecha_modificacion', 'descripcion_corta'
+    )
+    list_filter = ('tipo_modificacion', 'fecha_modificacion')
+    search_fields = ('venta__id', 'usuario_modificacion__username', 'descripcion')
+    readonly_fields = ('fecha_modificacion',)
+    date_hierarchy = 'fecha_modificacion'
+    ordering = ['-fecha_modificacion']
+    
+    fieldsets = (
+        ('Información de Modificación', {
+            'fields': ('venta', 'usuario_modificacion', 'tipo_modificacion', 'fecha_modificacion')
+        }),
+        ('Descripción', {
+            'fields': ('descripcion',)
+        }),
+        ('Datos de Auditoría', {
+            'fields': ('datos_anteriores', 'datos_nuevos'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def descripcion_corta(self, obj):
+        """Descripción corta para la lista"""
+        return obj.descripcion[:50] + "..." if len(obj.descripcion) > 50 else obj.descripcion
+    descripcion_corta.short_description = 'Descripción'
+    
+    def has_add_permission(self, request):
+        # Solo se crean automáticamente
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        # Solo lectura
+        return False

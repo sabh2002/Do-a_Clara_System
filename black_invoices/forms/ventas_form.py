@@ -13,14 +13,20 @@ class FacturaForm(forms.ModelForm):
             'metodo_pag': forms.Select(attrs={'class': 'form-control'})
         }
 
-# Formset mejorado para manejar cantidades decimales
+# Formset mejorado para manejar cantidades decimales con incrementos enteros
 class DetalleFacturaForm(forms.ModelForm):
     class Meta:
         model = DetalleFactura
         fields = ['producto', 'cantidad', 'tipo_factura']
         widgets = {
             'producto': forms.Select(attrs={'class': 'form-control select2 producto-select'}),
-            'cantidad': forms.NumberInput(attrs={'class': 'form-control cantidad', 'min': '0.001', 'step': '0.001'}),
+            # ✅ CORREGIDO: step="any" permite enteros y decimales sin conflictos de validación
+            'cantidad': forms.NumberInput(attrs={
+                'class': 'form-control cantidad', 
+                'min': '0.001', 
+                'step': 'any',  # Permite cualquier valor decimal o entero
+                'placeholder': 'Ej: 1, 2.5, 10.75'
+            }),
             'tipo_factura': forms.Select(attrs={'class': 'form-control'})
         }
     
@@ -39,30 +45,35 @@ class DetalleFacturaForm(forms.ModelForm):
             if cantidad > producto.stock:
                 raise forms.ValidationError(
                     f'Stock insuficiente para {producto.nombre}. '
-                    f'Disponible: {producto.stock}'
+                    f'Disponible: {producto.stock}, solicitado: {cantidad}'
                 )
         
         return cleaned_data
 
+# Formset para detalles de factura
 DetalleFacturaFormSet = inlineformset_factory(
-    Factura, DetalleFactura,
+    Factura, 
+    DetalleFactura, 
     form=DetalleFacturaForm,
     extra=1, 
-    can_delete=True
+    can_delete=True,
+    min_num=1,
+    validate_min=True
 )
 
+# ✅ FORMULARIO CORREGIDO - SIN CAMPO OBSERVACIONES
 class PagoVentaForm(forms.ModelForm):
-    """Formulario para registrar pagos en ventas a crédito"""
+    """Formulario para registrar pagos de ventas a crédito"""
     
     class Meta:
         model = PagoVenta
-        fields = ['monto', 'metodo_pago', 'referencia']
+        fields = ['monto', 'metodo_pago', 'referencia']  # Solo los campos que existen
         widgets = {
             'monto': forms.NumberInput(attrs={
-                'class': 'form-control', 
-                'min': '0.01', 
+                'class': 'form-control',
+                'min': '0.01',
                 'step': '0.01',
-                'placeholder': 'Monto a pagar'
+                'placeholder': 'Monto del pago'
             }),
             'metodo_pago': forms.Select(attrs={'class': 'form-control'}),
             'referencia': forms.TextInput(attrs={
@@ -71,22 +82,27 @@ class PagoVentaForm(forms.ModelForm):
                 'maxlength': '50'
             })
         }
-        
-    def __init__(self, *args, venta=None, **kwargs):
+    
+    def __init__(self, *args, **kwargs):
+        self.venta = kwargs.pop('venta', None)
         super().__init__(*args, **kwargs)
-        self.venta = venta
         
-        if venta:
-            # Establecer máximo según saldo pendiente
-            self.fields['monto'].widget.attrs['max'] = str(venta.saldo_pendiente)
-            
+        # Si se proporciona la venta, establecer límites
+        if self.venta:
+            saldo_pendiente = self.venta.saldo_pendiente
+            self.fields['monto'].widget.attrs['max'] = str(saldo_pendiente)
+            self.fields['monto'].help_text = f'Saldo pendiente: ${saldo_pendiente:,.2f}'
+    
     def clean_monto(self):
         monto = self.cleaned_data.get('monto')
-        if monto and self.venta:
+        
+        if self.venta and monto:
             if monto > self.venta.saldo_pendiente:
                 raise forms.ValidationError(
-                    f'El monto no puede exceder el saldo pendiente: ${self.venta.saldo_pendiente}'
+                    f'El monto no puede ser mayor al saldo pendiente '
+                    f'(${self.venta.saldo_pendiente:,.2f})'
                 )
+        
         return monto
     
     def clean(self):
@@ -97,6 +113,8 @@ class PagoVentaForm(forms.ModelForm):
         # Validar referencia para métodos que la requieren
         if metodo_pago in ['pago_movil', 'transferencia'] and not referencia:
             metodo_display = dict(PagoVenta.METODOS_PAGO_CHOICES).get(metodo_pago, metodo_pago)
-            raise forms.ValidationError(f'La referencia es obligatoria para {metodo_display}')
+            raise forms.ValidationError(
+                f'La referencia es obligatoria para {metodo_display}'
+            )
         
         return cleaned_data

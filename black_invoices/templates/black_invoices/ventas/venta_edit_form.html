@@ -1,0 +1,512 @@
+{% extends 'black_invoices/base/base.html' %}
+{% load static %}
+{% load custom_filters %}
+{% load l10n %}  {# ✅ CARGAR LIBRERÍA l10n PARA unlocalize #}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Alert de modificación -->
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle"></i>
+        <strong>Modificando Venta:</strong> Está editando la venta #{{ venta.id }}. Los cambios afectarán el stock y la facturación.
+    </div>
+    
+    <!-- Mostrar tasa de cambio actual -->
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i>
+        <strong>Tasa de cambio actual:</strong> 1 USD = {{ ""|tasa_cambio_actual }} VES
+        {% if perms.black_invoices.change_tasacambio %}
+        <a href="{% url 'black_invoices:tasa_cambio_list' %}" class="btn btn-sm btn-outline-primary ml-2">
+            <i class="fas fa-edit"></i> Actualizar
+        </a>
+        {% endif %}
+    </div>
+    
+    <form method="post" id="formVentaEdit">
+        {% csrf_token %}
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">{{ titulo }}</h3>
+                        <div class="card-tools">
+                            <a href="{% url 'black_invoices:venta_detail' venta.id %}" class="btn btn-secondary btn-sm">
+                                <i class="fas fa-arrow-left"></i> Volver
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Datos actuales de la venta -->
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="alert alert-secondary">
+                                    <strong>Datos actuales:</strong> 
+                                    Cliente: <span class="badge badge-info">
+                                        {% if cliente_actual %}{{ cliente_actual.nombre_completo }}{% else %}Sin cliente{% endif %}
+                                    </span> | 
+                                    Tipo: <span class="badge badge-{% if venta.credito %}warning{% else %}success{% endif %}">
+                                        {% if venta.credito %}Crédito{% else %}Contado{% endif %}
+                                    </span> | 
+                                    Total: <span class="badge badge-primary">${{ venta.total_venta|floatformat:2 }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Información básica de la venta -->
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Cliente:</label>
+                                    <select name="cliente" class="form-control select2" required>
+                                        <option value="">Seleccione un cliente...</option>
+                                        {% for cliente in clientes %}
+                                            <option value="{{ cliente.id }}" 
+                                                {% if cliente_actual and cliente_actual.id == cliente.id %}selected{% endif %}>
+                                                {{ cliente.nombre_completo }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Tipo de Venta:</label>
+                                    <select name="tipo_venta" class="form-control" id="tipoVenta">
+                                        {% for tipo in tipos_venta %}
+                                            <option value="{{ tipo.id }}" 
+                                                {% if tipo.id == 'credito' and venta.credito %}selected{% endif %}
+                                                {% if tipo.id == 'contado' and not venta.credito %}selected{% endif %}>
+                                                {{ tipo.nombre }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4" id="metodoPagoDiv">
+                                <div class="form-group">
+                                    <label>Método de Pago:</label>
+                                    <select name="metodo_pag" class="form-control" id="metodoPago">
+                                        {% for metodo in metodos_pago %}
+                                            <option value="{{ metodo.id }}" 
+                                                {% if metodo_pago_actual and metodo_pago_actual == metodo.id %}selected{% endif %}>
+                                                {{ metodo.nombre }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tabla de productos -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <h5>Productos en la Venta</h5>
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i> 
+                                    <strong>Productos actuales:</strong> Modifique las cantidades según sea necesario o elimine productos. El stock mostrado incluye la cantidad de este producto en la venta actual.
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-striped" id="tablaProductos">
+                                        <thead>
+                                            <tr>
+                                                <th>Producto</th>
+                                                <th>Stock Disponible</th>
+                                                <th>Precio Unitario</th>
+                                                <th>Cantidad</th>
+                                                <th>Subtotal</th>
+                                                <th>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="productosBody">
+                                            <!-- ✅ PRODUCTOS RENDERIZADOS CORRECTAMENTE DESDE DJANGO -->
+                                            {% for producto in productos_de_la_venta %}
+                                            <tr id="producto_{{ producto.id }}" class="fila-producto">
+                                                <td>
+                                                    <strong>{{ producto.nombre }}</strong>
+                                                    <input type="hidden" name="productos[{{ forloop.counter0 }}][id]" value="{{ producto.id }}">
+                                                    <!-- ✅ USAR unlocalize PARA FORZAR FORMATO CON PUNTO -->
+                                                    <input type="hidden" name="productos[{{ forloop.counter0 }}][precio]" value="{{ producto.precio|unlocalize }}">
+                                                    <br><small class="text-muted">ID: {{ producto.id }}</small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-info">{{ producto.stock }} unidades</span>
+                                                </td>
+                                                <td class="precio">
+                                                    <strong>${{ producto.precio|floatformat:2 }}</strong>
+                                                    <br><small class="text-muted">{{ producto.precio|multiplicar:tasa_cambio|floatformat:2 }} Bs</small>
+                                                </td>
+                                                <td>
+                                                    <!-- ✅ CANTIDAD CON STEP ANY Y VALUE CON unlocalize -->
+                                                    <input type="number" 
+                                                           name="productos[{{ forloop.counter0 }}][cantidad]" 
+                                                           class="form-control cantidad" 
+                                                           value="{{ producto.cantidad|unlocalize }}"
+                                                           min="0.001" 
+                                                           step="any"
+                                                           max="{{ producto.stock }}"
+                                                           placeholder="Cantidad"
+                                                           onchange="updateSubtotalRow(this)"
+                                                           oninput="validateStock(this)"
+                                                           required>
+                                                </td>
+                                                <td class="subtotal">
+                                                    <strong>${{ producto.subtotal|floatformat:2 }}</strong>
+                                                    <br><small class="text-muted">{{ producto.subtotal|multiplicar:tasa_cambio|floatformat:2 }} Bs</small>
+                                                </td>
+                                                <td>
+                                                    <button type="button" class="btn btn-danger btn-sm" onclick="eliminarProducto({{ producto.id }})">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Botón para agregar más productos -->
+                                <div class="row mt-3">
+                                    <div class="col-md-12">
+                                        <button type="button" class="btn btn-primary" id="btnAgregarProducto">
+                                            <i class="fas fa-plus"></i> Agregar Producto
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Total de la venta -->
+                                <div class="row mt-3">
+                                    <div class="col-md-6 offset-md-6">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h5>Total de la Venta</h5>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <strong>Total USD:</strong>
+                                                    </div>
+                                                    <div class="col-md-6 text-right">
+                                                        <span id="totalUSD">${{ venta.total_venta|floatformat:2 }}</span>
+                                                    </div>
+                                                </div>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <strong>Total VES:</strong>
+                                                    </div>
+                                                    <div class="col-md-6 text-right">
+                                                        <span id="totalVES">{{ venta.total_venta|multiplicar:tasa_cambio|floatformat:2 }} Bs</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botones de acción -->
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <button type="submit" class="btn btn-success btn-lg">
+                                    <i class="fas fa-save"></i> Guardar Cambios
+                                </button>
+                                <a href="{% url 'black_invoices:venta_detail' venta.id %}" class="btn btn-secondary btn-lg ml-2">
+                                    <i class="fas fa-times"></i> Cancelar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- Modal para agregar productos -->
+    <div class="modal fade" id="modalAgregarProducto" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 class="modal-title">Agregar Producto</h4>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Buscar Producto:</label>
+                        <input type="text" class="form-control" id="buscarProducto" placeholder="Escriba el nombre del producto...">
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="tablaProductosModal">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Nombre</th>
+                                    <th>Precio</th>
+                                    <th>Stock</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for producto in productos %}
+                                <tr class="producto-row" 
+                                    data-nombre="{{ producto.nombre|lower }}" 
+                                    data-sku="{{ producto.sku|lower }}">
+                                    <td>{{ producto.sku|default:producto.id }}</td>
+                                    <td>{{ producto.nombre }}</td>
+                                    <td>${{ producto.precio|floatformat:2 }}</td>
+                                    <td>{{ producto.stock }}</td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-primary seleccionar-producto" 
+                                                data-id="{{ producto.id }}" 
+                                                data-nombre="{{ producto.nombre }}" 
+                                                data-precio="{{ producto.precio }}" 
+                                                data-stock="{{ producto.stock }}">
+                                            Seleccionar
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<!-- Variables JavaScript - PROTEGIDAS CONTRA ERRORES -->
+<script>
+    // ✅ CARGA PROTEGIDA DE VARIABLES JAVASCRIPT
+    let productosActuales = [];
+    let tasaCambio = 1;
+    let contadorFormas = {{ productos_de_la_venta|length }};
+    
+    try {
+        // Intentar cargar productos actuales
+        const productosRaw = {{ productos_actuales|safe }};
+        if (Array.isArray(productosRaw)) {
+            productosActuales = productosRaw;
+            console.log('✅ Productos cargados correctamente:', productosActuales.length, 'items');
+        } else {
+            console.warn('⚠️ productos_actuales no es array, usando []');
+            productosActuales = [];
+        }
+    } catch(e) {
+        console.error('❌ Error cargando productos:', e);
+        productosActuales = [];
+    }
+    
+    try {
+        // Intentar cargar tasa de cambio
+        tasaCambio = {{ tasa_cambio|default:1 }};
+        if (isNaN(tasaCambio) || tasaCambio <= 0) {
+            tasaCambio = 1;
+        }
+        console.log('✅ Tasa de cambio:', tasaCambio);
+    } catch(e) {
+        console.error('❌ Error cargando tasa cambio:', e);
+        tasaCambio = 1;
+    }
+    
+    // Debug info seguro
+    console.log('=== DEBUG INFO PROTEGIDO ===');
+    console.log('Cliente actual:', '{{ cliente_actual.nombre_completo|default:"Sin cliente" }}');
+    console.log('Método pago actual:', '{{ metodo_pago_actual|default:"Sin método" }}');
+    console.log('Venta a crédito:', {{ venta.credito|yesno:"true,false" }});
+    console.log('Total productos cargados:', contadorFormas);
+    console.log('=================================');
+
+    // ✅ FUNCIONES MEJORADAS PARA EDICIÓN DE VENTAS
+
+    // Función para actualizar subtotal de una fila específica
+    function updateSubtotalRow(input) {
+        const row = input.closest('.fila-producto');
+        if (!row) return;
+
+        const precioInput = row.querySelector('input[name$="[precio]"]');
+        const cantidadInput = input;
+        const subtotalCell = row.querySelector('.subtotal');
+        
+        if (!precioInput || !subtotalCell) return;
+
+        const precio = parseFloat(precioInput.value) || 0;
+        const cantidad = parseFloat(cantidadInput.value) || 0;
+        const subtotal = precio * cantidad;
+        
+        // Actualizar visualización del subtotal
+        const subtotalBs = subtotal * tasaCambio;
+        subtotalCell.innerHTML = `<strong>$${subtotal.toFixed(2)}</strong><br><small class="text-muted">${subtotalBs.toFixed(2)} Bs</small>`;
+        
+        // Actualizar total general
+        updateTotalGeneral();
+    }
+
+    // Función para validar stock
+    function validateStock(input) {
+        const cantidad = parseFloat(input.value) || 0;
+        const maxStock = parseFloat(input.getAttribute('max')) || 0;
+        
+        if (cantidad > maxStock) {
+            input.setCustomValidity(`Stock insuficiente. Máximo disponible: ${maxStock}`);
+            input.classList.add('is-invalid');
+        } else if (cantidad <= 0) {
+            input.setCustomValidity('La cantidad debe ser mayor a 0');
+            input.classList.add('is-invalid');
+        } else {
+            input.setCustomValidity('');
+            input.classList.remove('is-invalid');
+        }
+    }
+
+    // Función para actualizar el total general
+    function updateTotalGeneral() {
+        let totalUSD = 0;
+        
+        document.querySelectorAll('.fila-producto').forEach(row => {
+            const precioInput = row.querySelector('input[name$="[precio]"]');
+            const cantidadInput = row.querySelector('input[name$="[cantidad]"]');
+            
+            if (precioInput && cantidadInput) {
+                const precio = parseFloat(precioInput.value) || 0;
+                const cantidad = parseFloat(cantidadInput.value) || 0;
+                totalUSD += precio * cantidad;
+            }
+        });
+        
+        const totalVES = totalUSD * tasaCambio;
+        
+        document.getElementById('totalUSD').textContent = `$${totalUSD.toFixed(2)}`;
+        document.getElementById('totalVES').textContent = `${totalVES.toFixed(2)} Bs`;
+    }
+
+    // Función para eliminar producto
+    function eliminarProducto(productoId) {
+        if (confirm('¿Está seguro de eliminar este producto de la venta?')) {
+            const row = document.getElementById(`producto_${productoId}`);
+            if (row) {
+                row.remove();
+                updateTotalGeneral();
+            }
+        }
+    }
+
+    // Función para agregar nuevo producto
+    function agregarProducto(id, nombre, precio, stock) {
+        const tbody = document.getElementById('productosBody');
+        const newRow = document.createElement('tr');
+        newRow.id = `producto_${id}`;
+        newRow.className = 'fila-producto';
+        
+        newRow.innerHTML = `
+            <td>
+                <strong>${nombre}</strong>
+                <input type="hidden" name="productos[${contadorFormas}][id]" value="${id}">
+                <input type="hidden" name="productos[${contadorFormas}][precio]" value="${precio}">
+                <br><small class="text-muted">ID: ${id}</small>
+            </td>
+            <td>
+                <span class="badge badge-info">${stock} unidades</span>
+            </td>
+            <td class="precio">
+                <strong>${parseFloat(precio).toFixed(2)}</strong>
+                <br><small class="text-muted">${(precio * tasaCambio).toFixed(2)} Bs</small>
+            </td>
+            <td>
+                <input type="number" 
+                       name="productos[${contadorFormas}][cantidad]" 
+                       class="form-control cantidad" 
+                       value="1"
+                       min="0.001" 
+                       step="any"
+                       max="${stock}"
+                       placeholder="Cantidad"
+                       onchange="updateSubtotalRow(this)"
+                       oninput="validateStock(this)"
+                       required>
+            </td>
+            <td class="subtotal">
+                <strong>${parseFloat(precio).toFixed(2)}</strong>
+                <br><small class="text-muted">${(precio * tasaCambio).toFixed(2)} Bs</small>
+            </td>
+            <td>
+                <button type="button" class="btn btn-danger btn-sm" onclick="eliminarProducto(${id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tbody.appendChild(newRow);
+        contadorFormas++;
+        updateTotalGeneral();
+        
+        // Cerrar modal
+        $('#modalAgregarProducto').modal('hide');
+        
+        console.log(`✅ Producto agregado: ID=${id}, Nombre=${nombre}, Contador=${contadorFormas-1}`);
+    }
+
+    // Event listeners cuando el documento esté listo
+    document.addEventListener('DOMContentLoaded', function() {
+        // Calcular total inicial
+        updateTotalGeneral();
+        
+        // Manejador para mostrar/ocultar método de pago
+        const tipoVenta = document.getElementById('tipoVenta');
+        const metodoPagoDiv = document.getElementById('metodoPagoDiv');
+        
+        function toggleMetodoPago() {
+            if (tipoVenta.value === 'credito') {
+                metodoPagoDiv.style.display = 'none';
+            } else {
+                metodoPagoDiv.style.display = 'block';
+            }
+        }
+        
+        tipoVenta.addEventListener('change', toggleMetodoPago);
+        toggleMetodoPago(); // Ejecutar al cargar
+        
+        // Manejador para agregar producto
+        document.getElementById('btnAgregarProducto').addEventListener('click', function() {
+            $('#modalAgregarProducto').modal('show');
+        });
+        
+        // Manejador para seleccionar producto en modal
+        document.querySelectorAll('.seleccionar-producto').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.dataset.id;
+                const nombre = this.dataset.nombre;
+                const precio = this.dataset.precio;
+                const stock = this.dataset.stock;
+                
+                // Verificar si el producto ya está en la venta
+                if (document.getElementById(`producto_${id}`)) {
+                    alert('Este producto ya está en la venta. Modifique la cantidad en la tabla.');
+                    return;
+                }
+                
+                agregarProducto(id, nombre, precio, stock);
+            });
+        });
+        
+        // Función de búsqueda en modal
+        document.getElementById('buscarProducto').addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            const rows = document.querySelectorAll('.producto-row');
+            
+            rows.forEach(row => {
+                const nombre = row.dataset.nombre;
+                const sku = row.dataset.sku;
+                
+                if (nombre.includes(query) || sku.includes(query)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

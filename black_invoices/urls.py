@@ -29,6 +29,7 @@ urlpatterns = [
     path('ventas/', views.VentaListView.as_view(), name='venta_list'),
     path('ventas/crear/', views.VentaCreateView.as_view(), name='venta_create'),
     path('ventas/<int:pk>/', views.VentaDetailView.as_view(), name='venta_detail'),
+    path('ventas/<int:pk>/editar/', views.VentaUpdateView.as_view(), name='venta_update'),
     path('ventas/<int:pk>/cancelar/', views.cancelar_venta, name='cancelar_venta'),
     path('ventas/pendientes/', views.VentasPendientesView.as_view(), name='ventas_pendientes'),
     path('ventas/<int:pk>/pago/', views.RegistrarPagoView.as_view(), name='registrar_pago'),
@@ -57,6 +58,9 @@ urlpatterns = [
     path('configuracion/tasa-cambio/manual/', views.TasaCambioManualView.as_view(), name='tasa_cambio_manual'),
     path('api/productos/buscar/', views.ProductoSearchAPIView.as_view(), name='producto_search_api'),
     path('nota-entrega/<int:pk>/pdf/', views.NotaEntregaPDFView.as_view(), name='nota_entrega_pdf'),
+    
+    # Reportes de ganancias
+    path('reportes/ganancias/', views.ReporteGananciasView.as_view(), name='reporte_ganancias'),
 
 # URL para editar perfil
 

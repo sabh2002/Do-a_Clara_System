@@ -37,3 +37,59 @@ def tasa_cambio_actual(dummy=None):
         return tasa_actual.tasa_usd_ves if tasa_actual else 1
     except:
         return 1
+
+# ✅ NUEVO: Filtro multiplicar que faltaba
+@register.filter(name='multiplicar')
+def multiplicar(value, arg):
+    """
+    Multiplica el valor por el argumento
+    Uso en template: {{ precio|multiplicar:tasa_cambio }}
+    """
+    try:
+        if value is None or arg is None:
+            return 0
+        return float(value) * float(arg)
+    except (ValueError, TypeError):
+        return 0
+
+# ✅ FILTROS ADICIONALES ÚTILES
+@register.filter(name='formato_moneda_usd')
+def formato_moneda_usd(value):
+    """
+    Formatea un número como moneda en dólares
+    Uso: {{ monto|formato_moneda_usd }}
+    """
+    try:
+        return f"${float(value):,.2f}"
+    except (ValueError, TypeError):
+        return "$0.00"
+
+@register.filter(name='formato_moneda_ves')
+def formato_moneda_ves(value):
+    """
+    Formatea un número como moneda en bolívares
+    Uso: {{ monto|formato_moneda_ves }}
+    """
+    try:
+        return f"{float(value):,.2f} Bs"
+    except (ValueError, TypeError):
+        return "0.00 Bs"
+
+@register.filter(name='stock_badge_class')
+def stock_badge_class(stock):
+    """
+    Retorna la clase CSS apropiada para el badge de stock
+    Uso: {{ producto.stock|stock_badge_class }}
+    """
+    try:
+        stock_val = int(stock)
+        if stock_val <= 0:
+            return 'badge-danger'
+        elif stock_val <= 5:
+            return 'badge-warning'
+        elif stock_val <= 20:
+            return 'badge-info'
+        else:
+            return 'badge-success'
+    except (ValueError, TypeError):
+        return 'badge-secondary'

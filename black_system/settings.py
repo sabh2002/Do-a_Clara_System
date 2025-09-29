@@ -153,3 +153,25 @@ LOGGING = {
 
 # Nota: Para tareas programadas, usar crontab del sistema:
 # 0 9 * * * cd /ruta/al/proyecto && source env/bin/activate && python manage.py actualizar_tasa_cambio --force
+
+# ===============================
+# CONFIGURACIONES PARA VENTAS CON MUCHOS PRODUCTOS
+# ===============================
+
+# Permitir hasta 10,000 campos en formularios POST (para ventas con 200+ productos)
+# Cada producto tiene ~5 campos: id, cantidad, precio, etc.
+# 200 productos × 5 campos = 1000 campos + campos adicionales del formulario
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+
+# Aumentar límite de memoria para formularios grandes (50MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB en bytes
+
+# Límite de memoria para archivos subidos (50MB)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800
+
+# Configuración de sesiones para formularios grandes
+SESSION_COOKIE_AGE = 86400  # 24 horas
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# Timeout para consultas de base de datos complejas
+DATABASE_QUERY_TIMEOUT = 30

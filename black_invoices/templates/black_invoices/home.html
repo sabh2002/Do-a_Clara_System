@@ -1,210 +1,346 @@
 {% extends 'black_invoices/base/base.html' %}
 {% load static %}
+{% load custom_filters %}
 
 {% block content %}
-<!-- Indicadores de resumen -->
-<div class="row">
-    <div class="col-lg-4 col-6">
-        <div class="small-box bg-info">
-            <div class="inner">
-                <h3>${{ total_ventas_hoy|floatformat:2 }}</h3>
-                <p>Ventas Hoy</p>
+
+
+            <div class="row mb-0">
+                <div class="col-sm-6">
+                    <h1 class="m-0">{{ titulo }}</h1>
+                </div>
+                <div class="col-sm-6">
+                    <ol class="breadcrumb float-sm-right">
+                        <li class="breadcrumb-item active">Dashboard</li>
+                    </ol>
+                </div>
+        
+
+    <section class="content">
+        <div class="container-fluid" style="padding-top: 10px;">
+            <!-- Métricas Principales de Ventas -->
+            <div class="row">
+                <div class="col-lg-3 col-6">
+                    <div class="small-box bg-info">
+                        <div class="inner">
+                            <h3>${{ total_ventas_hoy|floatformat:2 }}</h3>
+                            <p>Ventas Hoy</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-shopping-cart"></i>
+                        </div>
+                        <a href="{% url 'black_invoices:venta_list' %}" class="small-box-footer">
+                            Más información <i class="fas fa-arrow-circle-right"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="small-box bg-success">
+                        <div class="inner">
+                            <h3>${{ total_ventas_mes|floatformat:2 }}</h3>
+                            <p>Ventas Este Mes</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <a href="{% url 'black_invoices:venta_list' %}" class="small-box-footer">
+                            Más información <i class="fas fa-arrow-circle-right"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="small-box bg-warning">
+                        <div class="inner">
+                            <h3>${{ total_ventas_anio|floatformat:2 }}</h3>
+                            <p>Ventas Este Año</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-calendar-alt"></i>
+                        </div>
+                        <a href="{% url 'black_invoices:venta_list' %}" class="small-box-footer">
+                            Más información <i class="fas fa-arrow-circle-right"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="small-box bg-danger">
+                        <div class="inner">
+                            <h3>{{ productos_stock_bajo|length }}</h3>
+                            <p>Productos Stock Bajo</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <a href="{% url 'black_invoices:producto_list' %}" class="small-box-footer">
+                            Más información <i class="fas fa-arrow-circle-right"></i>
+                        </a>
+                    </div>
+                </div>
             </div>
-            <div class="icon">
-                <i class="fas fa-shopping-cart"></i>
+
+            <!-- MÉTRICAS DE GANANCIAS CORREGIDAS -->
+            <div class="row">
+                <!-- <div class="col-lg-3 col-6">
+                    <div class="small-box bg-success">
+                        <div class="inner">
+                            <h3>${{ ganancias_realizadas_hoy|floatformat:2 }}</h3>
+                            <p>Ganancias Hoy</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <a href="{% url 'black_invoices:reporte_ganancias' %}" class="small-box-footer">
+                            Más información <i class="fas fa-arrow-circle-right"></i>
+                        </a>
+                    </div>
+                </div> -->
+                <div class="col-lg-3 col-6">
+                    <div class="small-box bg-info">
+                        <div class="inner">
+                            <h3>${{ ganancias_realizadas_mes|floatformat:2 }}</h3>
+                            <p>Ganancias Este Mes</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                        <a href="{% url 'black_invoices:reporte_ganancias' %}" class="small-box-footer">
+                            Más información <i class="fas fa-arrow-circle-right"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="small-box bg-purple">
+                        <div class="inner">
+                            <h3>${{ ganancias_pendientes_total|floatformat:2 }}</h3>
+                            <p>Ganancias Crédito Pendiente</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-credit-card"></i>
+                        </div>
+                        <a href="{% url 'black_invoices:ventas_pendientes' %}" class="small-box-footer">
+                            Más información <i class="fas fa-arrow-circle-right"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <!-- <div class="small-box bg-orange">
+                        <div class="inner">
+                            
+                            {% if ganancias_realizadas_mes > 0 %}
+                                <h3>{{ margen_promedio_mes|floatformat:1|default:"0.0" }}%</h3>
+                            {% else %}
+                                <h3>0.0%</h3>
+                            {% endif %}
+                            <p>Margen Promedio Este Mes</p>
+                        </div>
+                        <div class="icon">
+                            <i class="fas fa-percentage"></i>
+                        </div>
+                        <a href="{% url 'black_invoices:reporte_ganancias' %}" class="small-box-footer">
+                            Más información <i class="fas fa-arrow-circle-right"></i>
+                        </a>
+                    </div> -->
+                </div>
             </div>
-            <a href="{% url 'black_invoices:venta_list' %}" class="small-box-footer">
-                Más información <i class="fas fa-arrow-circle-right"></i>
-            </a>
+
+            <!-- Ventas por Empleado y Alertas -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Ventas por Empleado (Este Mes)</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover text-nowrap">
+                                <thead>
+                                    <tr>
+                                        <th>Empleado</th>
+                                        <th>Cantidad</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for venta in ventas_empleados %}
+                                    <tr>
+                                        <td>{{ venta.empleado__nombre }} {{ venta.empleado__apellido }}</td>
+                                        <td><span class="badge badge-info">{{ venta.cantidad }}</span></td>
+                                        <td><strong>${{ venta.total|floatformat:2 }}</strong></td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="3" class="text-center text-muted">No hay datos disponibles</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Productos Stock Bajo</h3>
+                        </div>
+                        <div class="card-body">
+                            {% if productos_stock_bajo %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Producto</th>
+                                                <th>Stock</th>
+                                                <th>Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for producto in productos_stock_bajo|slice:":5" %}
+                                            <tr>
+                                                <td>{{ producto.nombre }}</td>
+                                                <td>
+                                                    <span class="badge {{ producto.get_stock_badge_class }}">
+                                                        {{ producto.stock }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <a href="{% url 'black_invoices:producto_stock' producto.pk %}" 
+                                                       class="btn btn-sm btn-primary">
+                                                        <i class="fas fa-plus"></i>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <p class="text-muted">No hay productos con stock bajo</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gráfico de Ventas y Productos Top -->
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Ventas por Día (Últimos 15 días)</h3>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="salesChart" style="min-height: 250px; height: 250px; max-height: 250px; max-width: 100%;"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Productos Más Vendidos</h3>
+                        </div>
+                        <div class="card-body">
+                            <ul class="products-list product-list-in-card pl-2 pr-2">
+                                {% for producto in productos_top %}
+                                <li class="item">
+                                    <div class="product-info">
+                                        <a href="javascript:void(0)" class="product-title">
+                                            {{ producto.producto__nombre }}
+                                            <span class="badge badge-info float-right">{{ producto.total }} unidades</span>
+                                        </a>
+                                    </div>
+                                </li>
+                                {% empty %}
+                                <li class="item">
+                                    <div class="product-info">
+                                        <span class="text-muted">No hay datos disponibles</span>
+                                    </div>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Productos por Ganancia -->
+            {% if productos_top_ganancia %}
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Top Productos por Ganancia (Este Mes)</h3>
+                        </div>
+                        <div class="card-body table-responsive p-0">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Producto</th>
+                                        <th>Cantidad Vendida</th>
+                                        <th>Ganancia Total</th>
+                                        <th>Margen Promedio</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in productos_top_ganancia %}
+                                    <tr>
+                                        <td>{{ item.producto__nombre }}</td>
+                                        <td>{{ item.total_cantidad|floatformat:2 }}</td>
+                                        <td><strong>${{ item.total_ganancia|floatformat:2 }}</strong></td>
+                                        <td>{{ item.margen_promedio|floatformat:1 }}%</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
         </div>
-    </div>
-    <div class="col-lg-4 col-6">
-        <div class="small-box bg-success">
-            <div class="inner">
-                <h3>${{ total_ventas_mes|floatformat:2 }}</h3>
-                <p>Ventas Este Mes</p>
-            </div>
-            <div class="icon">
-                <i class="fas fa-chart-line"></i>
-            </div>
-            <a href="{% url 'black_invoices:venta_list' %}" class="small-box-footer">
-                Más información <i class="fas fa-arrow-circle-right"></i>
-            </a>
-        </div>
-    </div>
-    <div class="col-lg-4 col-6">
-        <div class="small-box bg-warning">
-            <div class="inner">
-                <h3>${{ total_ventas_anio|floatformat:2 }}</h3>
-                <p>Ventas Este Año</p>
-            </div>
-            <div class="icon">
-                <i class="fas fa-calendar"></i>
-            </div>
-            <a href="{% url 'black_invoices:venta_list' %}" class="small-box-footer">
-                Más información <i class="fas fa-arrow-circle-right"></i>
-            </a>
-        </div>
-    </div>
+    </section>
 </div>
 
-<!-- Gráfico y Productos Top -->
-<div class="row">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Ventas Últimos 15 días</h3>
-            </div>
-            <div class="card-body">
-                <canvas id="salesChart" style="min-height: 250px; height: 250px; max-height: 250px; max-width: 100%;"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Productos Más Vendidos</h3>
-            </div>
-            <div class="card-body">
-                <ul class="products-list product-list-in-card pl-2 pr-2">
-                    {% for producto in productos_top %}
-                    <li class="item">
-                        <div class="product-info">
-                            <a href="javascript:void(0)" class="product-title">
-                                {{ producto.producto__nombre }}
-                                <span class="badge badge-info float-right">{{ producto.total }} unidades</span>
-                            </a>
-                        </div>
-                    </li>
-                    {% empty %}
-                    <li class="item">
-                        <div class="product-info">
-                            <span class="text-muted">No hay datos disponibles</span>
-                        </div>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Ventas por Empleado y Alertas -->
-<div class="row">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Ventas por Empleado (Este Mes)</h3>
-            </div>
-            <div class="card-body table-responsive p-0">
-                <table class="table table-hover text-nowrap">
-                    <thead>
-                        <tr>
-                            <th>Empleado</th>
-                            <th>Ventas</th>
-                            <th>Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for empleado in ventas_empleados %}
-                        <tr>
-                            <td>{{ empleado.empleado__nombre }} {{ empleado.empleado__apellido }}</td>
-                            <td>{{ empleado.cantidad }}</td>
-                            <td>${{ empleado.total|floatformat:2 }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="3" class="text-center">No hay datos disponibles</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Alertas de Stock Bajo</h3>
-            </div>
-            <div class="card-body table-responsive p-0">
-                <table class="table table-hover text-nowrap">
-                    <thead>
-                        <tr>
-                            <th>Producto</th>
-                            <th>Stock</th>
-                            <th>Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for producto in productos_stock_bajo %}
-                        <tr>
-                            <td>{{ producto.nombre }}</td>
-                            <td>
-                                <span class="badge {% if producto.stock <= 2 %}badge-danger{% else %}badge-warning{% endif %}">
-                                    {{ producto.stock }}
-                                </span>
-                            </td>
-                            <td>
-                                <a href="{% url 'black_invoices:producto_stock' producto.id %}" class="btn btn-xs btn-primary">
-                                    <i class="fas fa-plus"></i> Stock
-                                </a>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="3" class="text-center">No hay productos con stock bajo</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    // Datos para el gráfico
-    const labels = {{ chart_labels|safe }};
-    const data = {{ chart_data|safe }};
-    
-    // Configuración del gráfico
-    const ctx = document.getElementById('salesChart').getContext('2d');
-    const salesChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Ventas ($)',
-                data: data,
-                backgroundColor: 'rgba(60,141,188,0.2)',
-                borderColor: 'rgba(60,141,188,1)',
-                pointRadius: 3,
-                pointBackgroundColor: 'rgba(60,141,188,1)',
-                pointBorderColor: '#3b8bba',
-                pointHoverRadius: 5,
-                fill: true
-            }]
-        },
-        options: {
-            maintainAspectRatio: false,
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: false
+// Gráfico de ventas por día
+const ctx = document.getElementById('salesChart').getContext('2d');
+const salesChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: {{ chart_labels|safe }},
+        datasets: [{
+            label: 'Ventas ($)',
+            data: {{ chart_data|safe }},
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.1
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value) {
+                        return '$' + value.toFixed(2);
+                    }
                 }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true
+            }
+        },
+        plugins: {
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return 'Ventas: $' + context.parsed.y.toFixed(2);
+                    }
                 }
             }
         }
-    });
-  });
+    }
+});
 </script>
 {% endblock %}

@@ -728,6 +728,69 @@ class Ventas(models.Model):
             return self.nota_entrega.total
         return Decimal('0.00')
     
+    def crear_registros_ganancia(self):
+        """Crea los registros de ganancia histórica para esta venta"""
+        # Limpiar registros anteriores si existen
+        self.detalles_ganancia.all().delete()
+        
+        # Crear nuevos registros según el tipo de documento
+        if self.factura:
+            for detalle in self.factura.detallefactura_set.all():
+                DetalleGanancia.crear_desde_detalle_factura(self, detalle)
+        elif self.nota_entrega:
+            for detalle in self.nota_entrega.detalles_nota.all():
+                DetalleGanancia.crear_desde_detalle_nota(self, detalle)
+    
+    def get_ganancia_total_venta(self):
+        """Obtiene la ganancia total calculada para esta venta"""
+        return self.detalles_ganancia.aggregate(
+            total=models.Sum('ganancia_total')
+        )['total'] or Decimal('0.00')
+    
+    def get_margen_promedio_venta(self):
+        """Obtiene el margen promedio de ganancia de esta venta"""
+        return self.detalles_ganancia.aggregate(
+            promedio=models.Avg('margen_porcentaje')
+        )['promedio'] or 0
+    
+    def actualizar_stock_inteligente(self, detalles_anteriores, detalles_nuevos):
+        """
+        Actualiza el stock de manera inteligente basado en los cambios
+        detalles_anteriores: dict {producto_id: cantidad_anterior}
+        detalles_nuevos: dict {producto_id: cantidad_nueva}
+        """
+        from django.db import transaction
+        from decimal import Decimal
+        
+        with transaction.atomic():
+            # Crear set de todos los productos afectados
+            productos_afectados = set(detalles_anteriores.keys()) | set(detalles_nuevos.keys())
+            
+            for producto_id in productos_afectados:
+                producto = Producto.objects.get(pk=producto_id)
+                
+                # ✅ CONVERTIR A DECIMAL PARA EVITAR ERRORES DE TIPO
+                cantidad_anterior = Decimal(str(detalles_anteriores.get(producto_id, 0)))
+                cantidad_nueva = Decimal(str(detalles_nuevos.get(producto_id, 0)))
+                
+                # Calcular cambio en stock
+                diferencia = cantidad_nueva - cantidad_anterior
+                
+                if diferencia != 0:
+                    # Validar stock suficiente si aumenta la venta
+                    if diferencia > 0 and producto.stock < diferencia:
+                        raise ValueError(
+                            f"Stock insuficiente para {producto.nombre}. "
+                            f"Disponible: {producto.stock}, Requerido: {diferencia}"
+                        )
+                    
+                    # ✅ ACTUALIZAR STOCK (ahora ambos son Decimal)
+                    producto.stock -= diferencia
+                    producto.save(update_fields=['stock'])
+                    
+                    print(f"DEBUG STOCK: Producto {producto.nombre} - Stock anterior: {producto.stock + diferencia}, "
+                          f"Diferencia: {diferencia}, Stock nuevo: {producto.stock}")
+    
 
 class PagoVenta(models.Model):
     METODOS_PAGO_CHOICES = [
@@ -1577,4 +1640,257 @@ class DetalleNotaEntrega(models.Model):
         
         # Actualizar totales de la nota
         self.nota_entrega.calcular_totales()
+
+
+class DetalleGanancia(models.Model):
+    """
+    Modelo para tracking histórico de ganancias por producto vendido
+    """
+    venta = models.ForeignKey(
+        'Ventas',
+        on_delete=models.CASCADE,
+        verbose_name="Venta",
+        related_name='detalles_ganancia'
+    )
+    
+    producto = models.ForeignKey(
+        'Producto',
+        on_delete=models.PROTECT,
+        verbose_name="Producto"
+    )
+    
+    cantidad = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        verbose_name="Cantidad Vendida",
+        validators=[MinValueValidator(0.001)]
+    )
+    
+    precio_venta_unitario = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Precio de Venta Unitario",
+        help_text="Precio al que se vendió el producto"
+    )
+    
+    precio_compra_unitario = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Precio de Compra Unitario",
+        help_text="Precio de compra del producto al momento de la venta"
+    )
+    
+    ganancia_unitaria = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Ganancia Unitaria",
+        help_text="Ganancia por unidad (precio_venta - precio_compra)"
+    )
+    
+    ganancia_total = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Ganancia Total",
+        help_text="Ganancia total de esta línea (ganancia_unitaria * cantidad)"
+    )
+    
+    margen_porcentaje = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        verbose_name="Margen de Ganancia %",
+        help_text="Porcentaje de ganancia sobre el costo"
+    )
+    
+    fecha_venta = models.DateTimeField(
+        verbose_name="Fecha de Venta",
+        help_text="Fecha cuando se realizó la venta"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de Registro"
+    )
+
+    class Meta:
+        verbose_name = "Detalle de Ganancia"
+        verbose_name_plural = "Detalles de Ganancia"
+        ordering = ['-fecha_venta']
+        indexes = [
+            models.Index(fields=['fecha_venta']),
+            models.Index(fields=['producto']),
+            models.Index(fields=['venta']),
+        ]
+
+    def __str__(self):
+        return f"Ganancia {self.producto.nombre} - Venta #{self.venta.id}"
+    
+    def save(self, *args, **kwargs):
+        """Calcular ganancia automáticamente antes de guardar"""
+        self.ganancia_unitaria = self.precio_venta_unitario - self.precio_compra_unitario
+        self.ganancia_total = self.ganancia_unitaria * self.cantidad
+        
+        # Calcular margen porcentaje
+        if self.precio_compra_unitario > 0:
+            self.margen_porcentaje = (self.ganancia_unitaria / self.precio_compra_unitario) * 100
+        else:
+            self.margen_porcentaje = 0
+            
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def crear_desde_detalle_factura(cls, venta, detalle_factura):
+        """Crear registro de ganancia desde un detalle de factura"""
+        return cls.objects.create(
+            venta=venta,
+            producto=detalle_factura.producto,
+            cantidad=detalle_factura.cantidad,
+            precio_venta_unitario=detalle_factura.producto.precio,
+            precio_compra_unitario=detalle_factura.producto.precio_compra,
+            fecha_venta=venta.fecha_venta
+        )
+    
+    @classmethod
+    def crear_desde_detalle_nota(cls, venta, detalle_nota):
+        """Crear registro de ganancia desde un detalle de nota de entrega"""
+        return cls.objects.create(
+            venta=venta,
+            producto=detalle_nota.producto,
+            cantidad=detalle_nota.cantidad,
+            precio_venta_unitario=detalle_nota.precio_unitario,
+            precio_compra_unitario=detalle_nota.producto.precio_compra,
+            fecha_venta=venta.fecha_venta
+        )
+    
+    @classmethod
+    def get_ganancias_realizadas(cls, fecha_inicio=None, fecha_fin=None):
+        """Obtiene ganancias de ventas completamente pagadas"""
+        queryset = cls.objects.filter(venta__status__vent_cancelada=False)
+        
+        # Filtrar solo ventas completadas (contado o crédito pagado)
+        # Para crédito: comparar monto_pagado con total de factura/nota
+        queryset = queryset.filter(
+            models.Q(venta__credito=False) |  # Ventas de contado
+            models.Q(
+                venta__credito=True, 
+                venta__factura__isnull=False,
+                venta__monto_pagado__gte=models.F('venta__factura__total_fac')
+            ) |  # Créditos con factura pagados
+            models.Q(
+                venta__credito=True, 
+                venta__nota_entrega__isnull=False,
+                venta__monto_pagado__gte=models.F('venta__nota_entrega__total')
+            )  # Créditos con nota pagados
+        )
+        
+        if fecha_inicio:
+            queryset = queryset.filter(fecha_venta__gte=fecha_inicio)
+        if fecha_fin:
+            queryset = queryset.filter(fecha_venta__lte=fecha_fin)
+            
+        return queryset.aggregate(
+            total_ganancia=models.Sum('ganancia_total')
+        )['total_ganancia'] or 0
+    
+    @classmethod
+    def get_ganancias_pendientes(cls, fecha_inicio=None, fecha_fin=None):
+        """Obtiene ganancias de ventas a crédito pendientes de pago"""
+        queryset = cls.objects.filter(
+            venta__credito=True,
+            venta__status__vent_cancelada=False
+        ).filter(
+            models.Q(
+                venta__factura__isnull=False,
+                venta__monto_pagado__lt=models.F('venta__factura__total_fac')
+            ) |
+            models.Q(
+                venta__nota_entrega__isnull=False,
+                venta__monto_pagado__lt=models.F('venta__nota_entrega__total')
+            )
+        )
+        
+        if fecha_inicio:
+            queryset = queryset.filter(fecha_venta__gte=fecha_inicio)
+        if fecha_fin:
+            queryset = queryset.filter(fecha_venta__lte=fecha_fin)
+            
+        return queryset.aggregate(
+            total_ganancia=models.Sum('ganancia_total')
+        )['total_ganancia'] or 0
+    
+    @classmethod
+    def get_ganancias_por_producto(cls, fecha_inicio=None, fecha_fin=None, limit=10):
+        """Obtiene las ganancias agrupadas por producto"""
+        queryset = cls.objects.filter(venta__status__vent_cancelada=False)
+        
+        if fecha_inicio:
+            queryset = queryset.filter(fecha_venta__gte=fecha_inicio)
+        if fecha_fin:
+            queryset = queryset.filter(fecha_venta__lte=fecha_fin)
+            
+        return queryset.values(
+            'producto__nombre',
+            'producto__id'
+        ).annotate(
+            total_ganancia=models.Sum('ganancia_total'),
+            total_cantidad=models.Sum('cantidad'),
+            margen_promedio=models.Avg('margen_porcentaje')
+        ).order_by('-total_ganancia')[:limit]
+
+
+class VentaHistorial(models.Model):
+    """
+    Modelo para auditoría de modificaciones de ventas
+    """
+    venta = models.ForeignKey(
+        'Ventas',
+        on_delete=models.CASCADE,
+        verbose_name="Venta",
+        related_name='historial_cambios'
+    )
+    
+    usuario_modificacion = models.ForeignKey(
+        'auth.User',
+        on_delete=models.PROTECT,
+        verbose_name="Usuario que Modificó"
+    )
+    
+    fecha_modificacion = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de Modificación"
+    )
+    
+    tipo_modificacion = models.CharField(
+        max_length=50,
+        verbose_name="Tipo de Modificación",
+        choices=[
+            ('productos', 'Modificación de Productos'),
+            ('cliente', 'Cambio de Cliente'),
+            ('metodo_pago', 'Cambio de Método de Pago'),
+            ('tipo_venta', 'Cambio de Tipo de Venta'),
+            ('completa', 'Modificación Completa'),
+        ]
+    )
+    
+    descripcion = models.TextField(
+        verbose_name="Descripción de Cambios",
+        help_text="Descripción detallada de los cambios realizados"
+    )
+    
+    datos_anteriores = models.JSONField(
+        verbose_name="Datos Anteriores",
+        help_text="Estado de la venta antes de la modificación"
+    )
+    
+    datos_nuevos = models.JSONField(
+        verbose_name="Datos Nuevos", 
+        help_text="Estado de la venta después de la modificación"
+    )
+
+    class Meta:
+        verbose_name = "Historial de Venta"
+        verbose_name_plural = "Historial de Ventas"
+        ordering = ['-fecha_modificacion']
+
+    def __str__(self):
+        return f"Modificación Venta #{self.venta.id} - {self.fecha_modificacion.strftime('%d/%m/%Y %H:%M')}"
 

@@ -1,6 +1,14 @@
 from datetime import date, datetime
 from decimal import Decimal
 import json
+
+
+class DecimalEncoder(json.JSONEncoder):
+    """Custom JSON encoder para manejar objetos Decimal"""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super(DecimalEncoder, self).default(obj)
 import math as m
 from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.auth import authenticate, login, logout
@@ -105,6 +113,100 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             stock__lte=5,  # Umbral configurable
             activo=True
         ).order_by('stock')
+
+        # =================== MÉTRICAS DE GANANCIAS CORREGIDAS ===================
+        from .models import DetalleGanancia, NotaEntrega
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Verificar datos en DetalleGanancia
+            total_registros = DetalleGanancia.objects.count()
+            print(f"DEBUG DASHBOARD: Total registros DetalleGanancia: {total_registros}")
+            
+            # Ganancias realizadas (ventas de contado + créditos pagados)
+            ganancias_hoy = DetalleGanancia.get_ganancias_realizadas(
+                fecha_inicio=hoy, fecha_fin=hoy
+            )
+            print(f"DEBUG DASHBOARD: Ganancias hoy: {ganancias_hoy}")
+            context['ganancias_realizadas_hoy'] = ganancias_hoy
+            
+            ganancias_mes = DetalleGanancia.get_ganancias_realizadas(
+                fecha_inicio=inicio_mes
+            )
+            print(f"DEBUG DASHBOARD: Ganancias mes: {ganancias_mes}")
+            context['ganancias_realizadas_mes'] = ganancias_mes
+            
+            ganancias_anio = DetalleGanancia.get_ganancias_realizadas(
+                fecha_inicio=inicio_anio
+            )
+            print(f"DEBUG DASHBOARD: Ganancias año: {ganancias_anio}")
+            context['ganancias_realizadas_anio'] = ganancias_anio
+            
+            # Ganancias pendientes (ventas a crédito no pagadas)
+            pendientes_total = DetalleGanancia.get_ganancias_pendientes()
+            print(f"DEBUG DASHBOARD: Ganancias pendientes total: {pendientes_total}")
+            context['ganancias_pendientes_total'] = pendientes_total
+            
+            pendientes_mes = DetalleGanancia.get_ganancias_pendientes(
+                fecha_inicio=inicio_mes
+            )
+            print(f"DEBUG DASHBOARD: Ganancias pendientes mes: {pendientes_mes}")
+            context['ganancias_pendientes_mes'] = pendientes_mes
+            
+            # Ganancias totales (realizadas + pendientes)
+            context['ganancias_totales_mes'] = ganancias_mes + pendientes_mes
+            context['ganancias_totales_anio'] = ganancias_anio + pendientes_total
+            
+            # ✅ NUEVO: Margen promedio del mes
+            margen_promedio_mes = DetalleGanancia.objects.filter(
+                fecha_venta__gte=inicio_mes,
+                venta__credito=False  # Solo ventas completadas de contado
+            ).aggregate(
+                promedio=Avg('margen_porcentaje')
+            )['promedio'] or Decimal('0.00')
+            
+            context['margen_promedio_mes'] = float(margen_promedio_mes)
+            print(f"DEBUG DASHBOARD: Margen promedio mes: {margen_promedio_mes}")
+            
+            print(f"DEBUG DASHBOARD: ✅ Métricas de ganancias calculadas correctamente")
+            
+        except Exception as e:
+            print(f"ERROR DASHBOARD: Falló cálculo de ganancias: {e}")
+            # Fallback seguro con valores en cero
+            context['ganancias_realizadas_hoy'] = Decimal('0.00')
+            context['ganancias_realizadas_mes'] = Decimal('0.00')
+            context['ganancias_realizadas_anio'] = Decimal('0.00')
+            context['ganancias_pendientes_total'] = Decimal('0.00')
+            context['ganancias_pendientes_mes'] = Decimal('0.00')
+            context['ganancias_totales_mes'] = Decimal('0.00')
+            context['ganancias_totales_anio'] = Decimal('0.00')
+            context['margen_promedio_mes'] = 0.0
+        
+        # Top productos por ganancia (este mes)
+        context['productos_top_ganancia'] = DetalleGanancia.get_ganancias_por_producto(
+            fecha_inicio=inicio_mes, limit=5
+        )
+        
+        # Incluir ventas a crédito en totales (notas de entrega)
+        ventas_credito_hoy = NotaEntrega.objects.filter(
+            fecha_nota__date=hoy
+        ).aggregate(total=Sum('total'))['total'] or 0
+        
+        ventas_credito_mes = NotaEntrega.objects.filter(
+            fecha_nota__gte=inicio_mes
+        ).aggregate(total=Sum('total'))['total'] or 0
+        
+        ventas_credito_anio = NotaEntrega.objects.filter(
+            fecha_nota__gte=inicio_anio
+        ).aggregate(total=Sum('total'))['total'] or 0
+        
+        # Totales combinados (facturas + notas de entrega)
+        context['total_ventas_hoy'] += ventas_credito_hoy
+        context['total_ventas_mes'] += ventas_credito_mes
+        context['total_ventas_anio'] += ventas_credito_anio
+
+        return context
 
         return context
 class BaseListView(LoginRequiredMixin, ListView):
@@ -722,6 +824,7 @@ from django.contrib import messages
 
 
 class VentaCreateView(LoginRequiredMixin, View):
+    """Vista optimizada para crear ventas - Maneja ventas grandes (200+ productos)"""
     template_name = 'black_invoices/ventas/venta_form.html'
 
     def get(self, request):
@@ -741,6 +844,11 @@ class VentaCreateView(LoginRequiredMixin, View):
         return render(request, self.template_name, context)
 
     def post(self, request):
+        # ✅ LOGGING MEJORADO PARA DEBUG
+        import time
+        start_time = time.time()
+        print(f"DEBUG VENTA: Iniciando creación de venta - Timestamp: {start_time}")
+        
         try:
             with transaction.atomic():
                 # 1. Verificar que el usuario tenga empleado asociado
@@ -756,28 +864,81 @@ class VentaCreateView(LoginRequiredMixin, View):
                     messages.error(request, 'Debe seleccionar un cliente.')
                     return redirect('black_invoices:venta_create')
 
-                # 3. Recopilar detalles de productos
+                # ✅ 3. RECOPILAR DETALLES DE PRODUCTOS - OPTIMIZADO
                 productos = []
                 total_forms = int(request.POST.get('form-TOTAL_FORMS', 0))
+                
+                print(f"DEBUG VENTA: Total forms detectados: {total_forms}")
+                
+                # Procesamiento optimizado por lotes
+                batch_size = 50  # Procesar de 50 en 50 para ventas muy grandes
+                
+                for batch_start in range(0, total_forms, batch_size):
+                    batch_end = min(batch_start + batch_size, total_forms)
+                    batch_time = time.time()
+                    
+                    print(f"DEBUG VENTA: Procesando lote {batch_start}-{batch_end}")
+                    
+                    for i in range(batch_start, batch_end):
+                        producto_id = request.POST.get(f'form-{i}-producto')
+                        cantidad_str = request.POST.get(f'form-{i}-cantidad')
 
-                for i in range(total_forms):
-                    producto_id = request.POST.get(f'form-{i}-producto')
-                    cantidad_str = request.POST.get(f'form-{i}-cantidad')
-
-                    if producto_id and cantidad_str:
-                        try:
-                            cantidad = float(cantidad_str)
-                            if cantidad > 0:
-                                productos.append({
-                                    'id': producto_id,
-                                    'cantidad': cantidad
-                                })
-                        except ValueError:
-                            continue
+                        if producto_id and cantidad_str:
+                            try:
+                                cantidad = float(cantidad_str)
+                                if cantidad > 0:
+                                    productos.append({
+                                        'id': producto_id,
+                                        'cantidad': cantidad
+                                    })
+                            except ValueError:
+                                print(f"DEBUG VENTA: Valor inválido en form-{i}: {cantidad_str}")
+                                continue
+                    
+                    batch_time_elapsed = time.time() - batch_time
+                    print(f"DEBUG VENTA: Lote {batch_start}-{batch_end} procesado en {batch_time_elapsed:.2f}s")
 
                 if not productos:
                     messages.error(request, 'Debe agregar al menos un producto a la venta.')
                     return redirect('black_invoices:venta_create')
+                
+                print(f"DEBUG VENTA: Total productos válidos: {len(productos)}")
+
+                # ✅ 4. VALIDACIÓN PREVIA DE STOCK - OPTIMIZADA
+                print("DEBUG VENTA: Iniciando validación de stock...")
+                stock_validation_time = time.time()
+                
+                # Obtener todos los productos de una vez para evitar múltiples queries
+                producto_ids = [prod['id'] for prod in productos]
+                productos_db = {
+                    str(p.id): p for p in Producto.objects.filter(
+                        id__in=producto_ids
+                    ).select_related('unidad_medida')
+                }
+                
+                # Validar stock de todos los productos
+                stock_errors = []
+                for prod in productos:
+                    producto_db = productos_db.get(prod['id'])
+                    if not producto_db:
+                        stock_errors.append(f"Producto ID {prod['id']} no encontrado")
+                        continue
+                        
+                    if prod['cantidad'] > producto_db.stock:
+                        stock_errors.append(
+                            f"Stock insuficiente para {producto_db.nombre}. "
+                            f"Disponible: {producto_db.stock}, solicitado: {prod['cantidad']}"
+                        )
+                
+                if stock_errors:
+                    for error in stock_errors[:5]:  # Mostrar máximo 5 errores
+                        messages.error(request, error)
+                    if len(stock_errors) > 5:
+                        messages.error(request, f"Y {len(stock_errors) - 5} errores más de stock...")
+                    return redirect('black_invoices:venta_create')
+                
+                stock_validation_elapsed = time.time() - stock_validation_time
+                print(f"DEBUG VENTA: Validación de stock completada en {stock_validation_elapsed:.2f}s")
 
                 # 4. Determinar tipo de venta
                 cliente = Cliente.objects.get(pk=cliente_id)
@@ -803,6 +964,9 @@ class VentaCreateView(LoginRequiredMixin, View):
 
                 if es_credito:
                     # ==================== FLUJO CRÉDITO: NOTA DE ENTREGA ====================
+                    print("DEBUG VENTA: Creando nota de entrega...")
+                    nota_creation_time = time.time()
+                    
                     # Crear nota de entrega
                     config = ConfiguracionSistema.get_config()
                     nota = NotaEntrega.objects.create(
@@ -811,30 +975,50 @@ class VentaCreateView(LoginRequiredMixin, View):
                         numero_nota=config.get_siguiente_numero_nota_entrega()
                     )
 
-                    # Procesar productos y crear detalles de nota
-                    for prod in productos:
-                        try:
-                            producto = Producto.objects.get(pk=prod['id'])
-                            cantidad = Decimal(str(prod['cantidad']))
+                    # ✅ PROCESAR PRODUCTOS EN LOTES PARA NOTAS DE ENTREGA - CORREGIDO
+                    detalles_batch = []
+                    stock_updates = []
+                    
+                    for i, prod in enumerate(productos):
+                        producto_db = productos_db[prod['id']]
+                        cantidad = Decimal(str(prod['cantidad']))
 
-                            # Verificar stock
-                            if cantidad > producto.stock:
-                                raise ValueError(f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}")
+                        # ✅ CALCULAR SUBTOTAL MANUALMENTE ANTES DE BULK_CREATE
+                        subtotal = cantidad * producto_db.precio
 
-                            # Crear detalle de nota de entrega
-                            DetalleNotaEntrega.objects.create(
-                                nota_entrega=nota,
-                                producto=producto,
-                                cantidad=cantidad,
-                                precio_unitario=producto.precio
+                        # Preparar detalle para creación en lote
+                        detalles_batch.append(DetalleNotaEntrega(
+                            nota_entrega=nota,
+                            producto=producto_db,
+                            cantidad=cantidad,
+                            precio_unitario=producto_db.precio,
+                            subtotal_linea=subtotal  # ✅ ASIGNAR SUBTOTAL MANUALMENTE
+                        ))
+                        
+                        # Preparar actualización de stock
+                        stock_updates.append({
+                            'producto': producto_db,
+                            'nueva_cantidad': producto_db.stock - cantidad
+                        })
+                        
+                        # Crear en lotes de 100 para evitar memoria excesiva
+                        if len(detalles_batch) >= 100 or i == len(productos) - 1:
+                            DetalleNotaEntrega.objects.bulk_create(detalles_batch)
+                            
+                            # Actualizar stock en lote
+                            for stock_update in stock_updates:
+                                stock_update['producto'].stock = stock_update['nueva_cantidad']
+                                
+                            Producto.objects.bulk_update(
+                                [su['producto'] for su in stock_updates], 
+                                ['stock']
                             )
-
-                            # Descontar stock
-                            producto.stock -= cantidad
-                            producto.save(update_fields=['stock'])
-
-                        except Producto.DoesNotExist:
-                            raise ValueError(f"El producto con ID {prod['id']} no existe.")
+                            
+                            # Limpiar lotes
+                            detalles_batch = []
+                            stock_updates = []
+                            
+                            print(f"DEBUG VENTA: Procesado lote hasta producto {i+1}/{len(productos)}")
 
                     # Calcular totales de la nota
                     nota.calcular_totales()
@@ -842,11 +1026,14 @@ class VentaCreateView(LoginRequiredMixin, View):
                     # Crear venta referenciando nota de entrega
                     venta = Ventas.objects.create(
                         empleado=request.user.empleado,
-                        nota_entrega=nota,  # NOTA DE ENTREGA, no factura
+                        nota_entrega=nota,
                         status=estado,
                         credito=True,
                         monto_pagado=0
                     )
+                    
+                    nota_creation_elapsed = time.time() - nota_creation_time
+                    print(f"DEBUG VENTA: Nota de entrega creada en {nota_creation_elapsed:.2f}s")
 
                     # Mensaje específico para crédito
                     tasa_actual = TasaCambio.get_tasa_actual()
@@ -869,6 +1056,9 @@ class VentaCreateView(LoginRequiredMixin, View):
 
                 else:
                     # ==================== FLUJO CONTADO: FACTURA DIRECTA ====================
+                    print("DEBUG VENTA: Creando factura...")
+                    factura_creation_time = time.time()
+                    
                     # Crear factura inmediatamente
                     factura = Factura(
                         cliente=cliente,
@@ -886,31 +1076,50 @@ class VentaCreateView(LoginRequiredMixin, View):
                             contado_fac=True
                         )
 
-                    # Procesar productos y crear detalles de factura
-                    for prod in productos:
-                        try:
-                            producto = Producto.objects.get(pk=prod['id'])
-                            cantidad = Decimal(str(prod['cantidad']))
+                    # ✅ PROCESAR PRODUCTOS EN LOTES PARA FACTURAS - CORREGIDO
+                    detalles_batch = []
+                    stock_updates = []
+                    
+                    for i, prod in enumerate(productos):
+                        producto_db = productos_db[prod['id']]
+                        cantidad = Decimal(str(prod['cantidad']))
 
-                            # Verificar stock
-                            if cantidad > producto.stock:
-                                raise ValueError(f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}")
+                        # ✅ CALCULAR SUBTOTAL MANUALMENTE ANTES DE BULK_CREATE
+                        subtotal = producto_db.precio * cantidad
 
-                            # Crear detalle de factura
-                            DetalleFactura.objects.create(
-                                factura=factura,
-                                producto=producto,
-                                cantidad=cantidad,
-                                tipo_factura=tipo_factura,
-                                sub_total=producto.precio * cantidad
+                        # Preparar detalle para creación en lote
+                        detalles_batch.append(DetalleFactura(
+                            factura=factura,
+                            producto=producto_db,
+                            cantidad=cantidad,
+                            tipo_factura=tipo_factura,
+                            sub_total=subtotal  # ✅ ASIGNAR SUBTOTAL MANUALMENTE
+                        ))
+                        
+                        # Preparar actualización de stock
+                        stock_updates.append({
+                            'producto': producto_db,
+                            'nueva_cantidad': producto_db.stock - cantidad
+                        })
+                        
+                        # Crear en lotes de 100
+                        if len(detalles_batch) >= 100 or i == len(productos) - 1:
+                            DetalleFactura.objects.bulk_create(detalles_batch)
+                            
+                            # Actualizar stock en lote
+                            for stock_update in stock_updates:
+                                stock_update['producto'].stock = stock_update['nueva_cantidad']
+                                
+                            Producto.objects.bulk_update(
+                                [su['producto'] for su in stock_updates], 
+                                ['stock']
                             )
-
-                            # Descontar stock
-                            producto.stock -= cantidad
-                            producto.save(update_fields=['stock'])
-
-                        except Producto.DoesNotExist:
-                            raise ValueError(f"El producto con ID {prod['id']} no existe.")
+                            
+                            # Limpiar lotes
+                            detalles_batch = []
+                            stock_updates = []
+                            
+                            print(f"DEBUG VENTA: Procesado lote hasta producto {i+1}/{len(productos)}")
 
                     # Calcular totales de la factura
                     factura.calcular_total_mejorado()
@@ -918,11 +1127,14 @@ class VentaCreateView(LoginRequiredMixin, View):
                     # Crear venta referenciando factura
                     venta = Ventas.objects.create(
                         empleado=request.user.empleado,
-                        factura=factura,  # FACTURA directa
+                        factura=factura,
                         status=estado,
                         credito=False,
                         monto_pagado=factura.total_fac
                     )
+                    
+                    factura_creation_elapsed = time.time() - factura_creation_time
+                    print(f"DEBUG VENTA: Factura creada en {factura_creation_elapsed:.2f}s")
 
                     # Mensaje específico para contado
                     tasa_actual = TasaCambio.get_tasa_actual()
@@ -942,11 +1154,29 @@ class VentaCreateView(LoginRequiredMixin, View):
                             f'Factura Fiscal #{factura.numero_factura} generada. '
                             f'Total: ${factura.total_fac:,.2f}. Pago recibido.'
                         )
+                
+                # ✅ CREAR REGISTROS DE GANANCIA OPTIMIZADO
+                print("DEBUG VENTA: Creando registros de ganancia...")
+                ganancia_time = time.time()
+                
+                venta.crear_registros_ganancia()
+                
+                ganancia_elapsed = time.time() - ganancia_time
+                print(f"DEBUG VENTA: Registros de ganancia creados en {ganancia_elapsed:.2f}s")
 
+                total_elapsed = time.time() - start_time
+                print(f"DEBUG VENTA: ✅ Venta creada exitosamente en {total_elapsed:.2f}s total")
+                print(f"DEBUG VENTA: Productos procesados: {len(productos)}")
+                
+                # ✅ REDIRECCIÓN GARANTIZADA A DETALLE DE VENTA
                 return redirect('black_invoices:venta_detail', pk=venta.id)
 
         except Exception as e:
-            messages.error(request, f"Error: {str(e)}")
+            total_elapsed = time.time() - start_time
+            print(f"ERROR VENTA: Error después de {total_elapsed:.2f}s: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            messages.error(request, f"Error al crear la venta: {str(e)}")
             return redirect('black_invoices:venta_create')
 class VentaListView(LoginRequiredMixin, ListView):
     model = Ventas
@@ -1146,6 +1376,537 @@ def cancelar_venta(request, pk):
 
 
 from django.db.models import Q
+
+class VentaUpdateView(LoginRequiredMixin, View):
+    """Vista para modificar ventas existentes - CORREGIDA"""
+    template_name = 'black_invoices/ventas/venta_edit_form.html'
+
+    def get(self, request, pk):
+        try:
+            venta = Ventas.objects.get(pk=pk)
+        except Ventas.DoesNotExist:
+            messages.error(request, 'Venta no encontrada.')
+            return redirect('black_invoices:venta_list')
+        
+        # Verificar si la venta puede ser modificada
+        if venta.status.vent_cancelada:
+            messages.error(request, 'No se puede modificar una venta cancelada.')
+            return redirect('black_invoices:venta_detail', pk=pk)
+
+        # Obtener tasa de cambio actual
+        tasa_actual = TasaCambio.get_tasa_actual()
+        
+        # Obtener datos actuales de la venta
+        cliente_actual = None
+        metodo_pago_actual = None
+        
+        if venta.factura:
+            cliente_actual = venta.factura.cliente
+            metodo_pago_actual = venta.factura.metodo_pag
+        elif venta.nota_entrega:
+            cliente_actual = venta.nota_entrega.cliente
+            metodo_pago_actual = 'credito'  # Las notas de entrega son siempre a crédito
+
+        # ✅ OBTENER PRODUCTOS DE LA VENTA CORREGIDO
+        productos_actuales = []
+        
+        if venta.factura:
+            detalles = venta.factura.detallefactura_set.all()
+            print(f"DEBUG: Factura tiene {detalles.count()} detalles")
+            
+            for detalle in detalles:
+                # Restaurar stock temporal para mostrar correctamente
+                stock_mostrado = detalle.producto.stock + int(detalle.cantidad or 0)
+                
+                producto_data = {
+                    'id': detalle.producto.id,
+                    'nombre': detalle.producto.nombre,
+                    'cantidad': float(detalle.cantidad or 0),
+                    'precio': float(detalle.producto.precio or 0),
+                    'stock': stock_mostrado,  # Stock + cantidad actual para edición
+                    'subtotal': float(detalle.sub_total or 0)
+                }
+                productos_actuales.append(producto_data)
+                print(f"DEBUG: Producto agregado de factura: {producto_data}")
+                
+        elif venta.nota_entrega:
+            detalles = venta.nota_entrega.detalles_nota.all()
+            print(f"DEBUG: Nota tiene {detalles.count()} detalles")
+            
+            for detalle in detalles:
+                # Restaurar stock temporal para mostrar correctamente
+                stock_mostrado = detalle.producto.stock + int(detalle.cantidad or 0)
+                
+                producto_data = {
+                    'id': detalle.producto.id,
+                    'nombre': detalle.producto.nombre,
+                    'cantidad': float(detalle.cantidad or 0),
+                    'precio': float(detalle.precio_unitario or 0),
+                    'stock': stock_mostrado,  # Stock + cantidad actual para edición
+                    'subtotal': float(detalle.subtotal_linea or 0)
+                }
+                productos_actuales.append(producto_data)
+                print(f"DEBUG: Producto agregado de nota: {producto_data}")
+        else:
+            print("DEBUG: La venta no tiene ni factura ni nota de entrega")
+            
+        print(f"DEBUG: Total productos encontrados: {len(productos_actuales)}")
+        
+        # Serializar productos para JavaScript con protección
+        try:
+            productos_json = json.dumps(productos_actuales, cls=DecimalEncoder)
+            # Test de parsing para validar JSON
+            json.loads(productos_json)
+            print(f"DEBUG: JSON generado correctamente")
+            productos_json_seguro = productos_json
+        except Exception as e:
+            print(f"ERROR: Falló serialización JSON: {e}")
+            # Fallback seguro
+            productos_json_seguro = "[]"
+        
+        # ✅ PREPARAR PRODUCTOS PARA RENDERIZADO DIRECTO EN TEMPLATE
+        productos_de_la_venta = []
+        for producto_data in productos_actuales:
+            productos_de_la_venta.append({
+                'id': producto_data['id'],
+                'nombre': producto_data['nombre'],
+                'cantidad': producto_data['cantidad'],  # ✅ Cantidad correcta
+                'precio': producto_data['precio'],
+                'stock': producto_data['stock'],
+                'subtotal': producto_data['subtotal']
+            })
+        
+        print(f"DEBUG GET: productos_de_la_venta preparados: {len(productos_de_la_venta)} items")
+        print(f"DEBUG GET: Ejemplo producto 0: {productos_de_la_venta[0] if productos_de_la_venta else 'Sin productos'}")
+
+        context = {
+            'titulo': f'Modificar Venta #{venta.id}',
+            'venta': venta,
+            'cliente_actual': cliente_actual,
+            'metodo_pago_actual': metodo_pago_actual,
+            'clientes': Cliente.objects.all(),
+            'productos_de_la_venta': productos_de_la_venta,  # Para renderizado directo
+            'productos': Producto.objects.filter(activo=True),
+            'productos_actuales': productos_json_seguro,  # JSON para JavaScript
+            'tipos_venta': [
+                {'id': 'contado', 'nombre': 'Contado'},
+                {'id': 'credito', 'nombre': 'Crédito'}
+            ],
+            'metodos_pago': [
+                {'id': 'efectivo', 'nombre': 'Efectivo'},
+                {'id': 'tarjeta', 'nombre': 'Tarjeta'},
+                {'id': 'transferencia', 'nombre': 'Transferencia'},
+                {'id': 'credito', 'nombre': 'Crédito'},
+                {'id': 'otro', 'nombre': 'Otro'}
+            ],
+            'tasa_cambio': tasa_actual.tasa_usd_ves if tasa_actual else 1
+        }
+        return render(request, self.template_name, context)
+
+    def post(self, request, pk):
+        try:
+            with transaction.atomic():
+                venta = Ventas.objects.get(pk=pk)
+                
+                # Verificar si la venta puede ser modificada
+                if venta.status.vent_cancelada:
+                    messages.error(request, 'No se puede modificar una venta cancelada.')
+                    return redirect('black_invoices:venta_detail', pk=pk)
+                
+                # Verificar que el usuario tenga empleado asociado
+                if not hasattr(request.user, 'empleado'):
+                    messages.error(request, 'No tienes un perfil de empleado asociado.')
+                    return redirect('black_invoices:venta_detail', pk=pk)
+
+                # Guardar estado anterior para auditoría
+                estado_anterior = self._capturar_estado_venta(venta)
+                
+                # Obtener datos del formulario
+                cliente_id = request.POST.get('cliente')
+                metodo_pago = request.POST.get('metodo_pag')
+                tipo_venta = request.POST.get('tipo_venta')
+                
+                if not cliente_id:
+                    messages.error(request, 'Debe seleccionar un cliente.')
+                    return redirect('black_invoices:venta_update', pk=pk)
+
+                # ✅ RECOPILAR PRODUCTOS NUEVOS DEL FORMULARIO - MEJORADO CON DEBUG
+                productos_nuevos = []
+                
+                # Método más robusto para recopilar productos
+                print("DEBUG POST: Recopilando productos del formulario...")
+                print("DEBUG POST: Claves POST:", list(request.POST.keys()))
+                
+                # Buscar todos los campos que sigan el patrón productos[X][campo]
+                productos_dict = {}
+                
+                for key, value in request.POST.items():
+                    if key.startswith('productos[') and '][' in key:
+                        # Extraer índice y campo: productos[0][id] -> índice=0, campo=id
+                        try:
+                            # Ejemplo: productos[0][id] -> ['productos', '0', 'id']
+                            parts = key.replace('[', '|').replace(']', '').split('|')
+                            if len(parts) >= 3:
+                                indice = int(parts[1])
+                                campo = parts[2]
+                                
+                                if indice not in productos_dict:
+                                    productos_dict[indice] = {}
+                                    
+                                productos_dict[indice][campo] = value
+                                print(f"DEBUG POST: productos[{indice}][{campo}] = {value}")
+                        except (ValueError, IndexError) as e:
+                            print(f"DEBUG POST: Error procesando {key}: {e}")
+                            continue
+                
+                print(f"DEBUG POST: productos_dict completo: {productos_dict}")
+                
+                # Convertir dict a lista y validar
+                for indice in sorted(productos_dict.keys()):
+                    prod_data = productos_dict[indice]
+                    
+                    try:
+                        producto_id = prod_data.get('id')
+                        cantidad_str = prod_data.get('cantidad', '0')
+                        precio_str = prod_data.get('precio', '0')
+                        
+                        print(f"DEBUG POST: Procesando índice {indice} - ID: {producto_id}, Cantidad: {cantidad_str}, Precio: {precio_str}")
+                        
+                        # Validar que producto_id no esté vacío
+                        if not producto_id or producto_id == '':
+                            print(f"DEBUG POST: Producto {indice} sin ID, ignorando")
+                            continue
+                        
+                        producto_id = int(producto_id)
+                        
+                        # ✅ NORMALIZAR FORMATO: Reemplazar comas por puntos antes de convertir a float
+                        cantidad_str = cantidad_str.replace(',', '.')
+                        precio_str = precio_str.replace(',', '.')
+                        
+                        cantidad = float(cantidad_str) if cantidad_str else 0
+                        precio = float(precio_str) if precio_str else 0
+                        
+                        if producto_id > 0 and cantidad > 0:
+                            productos_nuevos.append({
+                                'id': producto_id,
+                                'cantidad': cantidad,
+                                'precio': precio
+                            })
+                            print(f"DEBUG POST: ✅ Producto válido agregado: ID={producto_id}, Cant={cantidad}, Precio={precio}")
+                        else:
+                            print(f"DEBUG POST: ⚠️ Producto inválido - ID: {producto_id}, Cantidad: {cantidad}")
+                            
+                    except (ValueError, TypeError) as e:
+                        print(f"DEBUG POST: ❌ Error procesando producto {indice}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        continue
+                
+                print(f"DEBUG POST: Total productos nuevos recopilados: {len(productos_nuevos)}")
+                print(f"DEBUG POST: Productos nuevos: {productos_nuevos}")
+                
+                if not productos_nuevos:
+                    print("DEBUG POST: ❌ ERROR - No se encontraron productos válidos")
+                    messages.error(request, 'Debe agregar al menos un producto a la venta.')
+                    return redirect('black_invoices:venta_update', pk=pk)
+
+                # Calcular cambios en stock
+                detalles_anteriores = self._obtener_detalles_anteriores(venta)
+                detalles_nuevos = {str(prod['id']): prod['cantidad'] for prod in productos_nuevos}
+                
+                print(f"DEBUG POST: Detalles anteriores: {detalles_anteriores}")
+                print(f"DEBUG POST: Detalles nuevos: {detalles_nuevos}")
+                
+                # Validar y actualizar stock
+                venta.actualizar_stock_inteligente(detalles_anteriores, detalles_nuevos)
+                
+                # Determinar tipo de venta
+                cliente = Cliente.objects.get(pk=cliente_id)
+                es_credito = tipo_venta == 'credito'
+                
+                # Actualizar la venta según el tipo
+                if es_credito:
+                    # Crear o actualizar nota de entrega
+                    nota_entrega = self._actualizar_nota_entrega(venta, cliente, productos_nuevos)
+                    
+                    # Actualizar venta
+                    venta.credito = True
+                    venta.factura = None
+                    venta.nota_entrega = nota_entrega
+                    venta.monto_pagado = 0
+                    
+                    # Establecer estado pendiente
+                    estado_pendiente, _ = StatusVentas.objects.get_or_create(
+                        nombre="Pendiente",
+                        defaults={'vent_espera': True, 'vent_cancelada': False}
+                    )
+                    venta.status = estado_pendiente
+                else:
+                    # Crear o actualizar factura
+                    factura = self._actualizar_factura(venta, cliente, metodo_pago, productos_nuevos)
+                    
+                    # Actualizar venta
+                    venta.credito = False
+                    venta.factura = factura
+                    venta.nota_entrega = None
+                    venta.monto_pagado = factura.total_fac
+                    
+                    # Establecer estado completado
+                    estado_completado, _ = StatusVentas.objects.get_or_create(
+                        nombre="Completada",
+                        defaults={'vent_espera': False, 'vent_cancelada': False}
+                    )
+                    venta.status = estado_completado
+                
+                venta.save()
+                
+                # Recrear registros de ganancia
+                venta.crear_registros_ganancia()
+                
+                # Registrar cambio en historial
+                estado_nuevo = self._capturar_estado_venta(venta)
+                self._crear_registro_historial(venta, estado_anterior, estado_nuevo, request.user)
+                
+                messages.success(request, f'Venta #{venta.id} modificada exitosamente.')
+                return redirect('black_invoices:venta_detail', pk=venta.id)
+
+        except Exception as e:
+            print(f"ERROR POST: Error al modificar la venta: {str(e)}")
+            messages.error(request, f"Error al modificar la venta: {str(e)}")
+            return redirect('black_invoices:venta_update', pk=pk)
+    
+    def _obtener_detalles_anteriores(self, venta):
+        """Obtiene los productos y cantidades actuales de la venta"""
+        detalles = {}
+        if venta.factura:
+            for detalle in venta.factura.detallefactura_set.all():
+                detalles[str(detalle.producto.id)] = float(detalle.cantidad)
+        elif venta.nota_entrega:
+            for detalle in venta.nota_entrega.detalles_nota.all():
+                detalles[str(detalle.producto.id)] = float(detalle.cantidad)
+        return detalles
+    
+    def _actualizar_factura(self, venta, cliente, metodo_pago, productos):
+        """Crea o actualiza la factura de la venta"""
+        # Eliminar factura anterior si existe
+        if venta.factura:
+            venta.factura.delete()
+        
+        # Crear nueva factura
+        factura = Factura.objects.create(
+            cliente=cliente,
+            empleado=venta.empleado,
+            metodo_pag=metodo_pago
+        )
+        
+        # Crear detalles
+        tipo_factura, _ = TipoFactura.objects.get_or_create(
+            contado_fac=True,
+            defaults={'credito_fac': False}
+        )
+        
+        for prod in productos:
+            producto = Producto.objects.get(pk=prod['id'])
+            # ✅ CONVERTIR CANTIDAD A DECIMAL
+            cantidad_decimal = Decimal(str(prod['cantidad']))
+            
+            DetalleFactura.objects.create(
+                factura=factura,
+                tipo_factura=tipo_factura,
+                producto=producto,
+                cantidad=cantidad_decimal,
+                sub_total=producto.precio * cantidad_decimal
+            )
+        
+        # Calcular totales
+        factura.calcular_total_mejorado()
+        
+        return factura
+    
+    def _actualizar_nota_entrega(self, venta, cliente, productos):
+        """Crea o actualiza la nota de entrega de la venta"""
+        # Eliminar nota anterior si existe
+        if venta.nota_entrega:
+            venta.nota_entrega.delete()
+        
+        # Crear nueva nota de entrega
+        config = ConfiguracionSistema.get_config()
+        nota = NotaEntrega.objects.create(
+            numero_nota=config.get_siguiente_numero_nota_entrega(),
+            cliente=cliente,
+            empleado=venta.empleado
+        )
+        
+        # Crear detalles
+        for prod in productos:
+            producto = Producto.objects.get(pk=prod['id'])
+            # ✅ CONVERTIR CANTIDAD A DECIMAL
+            cantidad_decimal = Decimal(str(prod['cantidad']))
+            
+            DetalleNotaEntrega.objects.create(
+                nota_entrega=nota,
+                producto=producto,
+                cantidad=cantidad_decimal,
+                precio_unitario=producto.precio,
+                subtotal_linea=cantidad_decimal * producto.precio  # ✅ CALCULAR SUBTOTAL MANUALMENTE
+            )
+        
+        # Calcular totales
+        nota.calcular_totales()
+        
+        return nota
+    
+    def _capturar_estado_venta(self, venta):
+        """Captura el estado actual de la venta para auditoría"""
+        cliente_id = None
+        if venta.factura:
+            cliente_id = venta.factura.cliente.id
+        elif venta.nota_entrega:
+            cliente_id = venta.nota_entrega.cliente.id
+            
+        estado = {
+            'cliente_id': cliente_id,
+            'tipo_venta': 'credito' if venta.credito else 'contado',
+            'total_venta': float(venta.total_venta),
+            'productos': []
+        }
+        
+        if venta.factura:
+            estado['metodo_pago'] = venta.factura.metodo_pag
+            for detalle in venta.factura.detallefactura_set.all():
+                estado['productos'].append({
+                    'producto_id': detalle.producto.id,
+                    'cantidad': float(detalle.cantidad),
+                    'precio': float(detalle.producto.precio)
+                })
+        elif venta.nota_entrega:
+            for detalle in venta.nota_entrega.detalles_nota.all():
+                estado['productos'].append({
+                    'producto_id': detalle.producto.id,
+                    'cantidad': float(detalle.cantidad),
+                    'precio': float(detalle.precio_unitario)
+                })
+        
+        return estado
+    
+    def _crear_registro_historial(self, venta, estado_anterior, estado_nuevo, usuario):
+        """Crea el registro de historial de modificación"""
+        descripcion = "Venta modificada: "
+        cambios = []
+        
+        if estado_anterior.get('cliente_id') != estado_nuevo.get('cliente_id'):
+            cambios.append("cliente")
+        if estado_anterior.get('tipo_venta') != estado_nuevo.get('tipo_venta'):
+            cambios.append("tipo de venta")
+        if estado_anterior.get('metodo_pago') != estado_nuevo.get('metodo_pago'):
+            cambios.append("método de pago")
+        if estado_anterior.get('productos') != estado_nuevo.get('productos'):
+            cambios.append("productos")
+        
+        descripcion += ", ".join(cambios)
+        
+        # Solo crear el registro si existe el modelo VentaHistorial
+        try:
+            VentaHistorial.objects.create(
+                venta=venta,
+                usuario_modificacion=usuario,
+                tipo_modificacion='completa',
+                descripcion=descripcion,
+                datos_anteriores=estado_anterior,
+                datos_nuevos=estado_nuevo
+            )
+        except NameError:
+            # Si no existe el modelo VentaHistorial, simplemente registrar en log
+            print(f"HISTORIAL: {descripcion} por {usuario.username}")
+class ReporteGananciasView(LoginRequiredMixin, TemplateView):
+    """Vista para reportes detallados de ganancias"""
+    template_name = 'black_invoices/reportes/ganancias_report.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['titulo'] = 'Reporte de Ganancias'
+        
+        # Fechas para filtros
+        hoy = datetime.now().date()
+        inicio_mes = hoy.replace(day=1)
+        inicio_anio = hoy.replace(month=1, day=1)
+        
+        # Parámetros de filtro desde GET
+        fecha_inicio = self.request.GET.get('fecha_inicio')
+        fecha_fin = self.request.GET.get('fecha_fin')
+        
+        if fecha_inicio:
+            try:
+                fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+            except ValueError:
+                fecha_inicio = inicio_mes
+        else:
+            fecha_inicio = inicio_mes
+            
+        if fecha_fin:
+            try:
+                fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+            except ValueError:
+                fecha_fin = hoy
+        else:
+            fecha_fin = hoy
+        
+        context['fecha_inicio'] = fecha_inicio
+        context['fecha_fin'] = fecha_fin
+        
+        # Ganancias por producto en el período
+        context['ganancias_por_producto'] = DetalleGanancia.get_ganancias_por_producto(
+            fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, limit=50
+        )
+        
+        # Resumen de ganancias
+        context['total_ganancias_realizadas'] = DetalleGanancia.get_ganancias_realizadas(
+            fecha_inicio=fecha_inicio, fecha_fin=fecha_fin
+        )
+        
+        context['total_ganancias_pendientes'] = DetalleGanancia.get_ganancias_pendientes(
+            fecha_inicio=fecha_inicio, fecha_fin=fecha_fin
+        )
+        
+        context['total_ganancias_combinadas'] = (
+            context['total_ganancias_realizadas'] + context['total_ganancias_pendientes']
+        )
+        
+        # Estadísticas por tipo de venta
+        ganancias_contado = DetalleGanancia.objects.filter(
+            fecha_venta__gte=fecha_inicio,
+            fecha_venta__lte=fecha_fin,
+            venta__credito=False,
+            venta__status__vent_cancelada=False
+        ).aggregate(total=Sum('ganancia_total'))['total'] or 0
+        
+        ganancias_credito = DetalleGanancia.objects.filter(
+            fecha_venta__gte=fecha_inicio,
+            fecha_venta__lte=fecha_fin,
+            venta__credito=True,
+            venta__status__vent_cancelada=False
+        ).aggregate(total=Sum('ganancia_total'))['total'] or 0
+        
+        context['ganancias_contado'] = ganancias_contado
+        context['ganancias_credito'] = ganancias_credito
+        
+        # Ganancias por empleado
+        ganancias_por_empleado = DetalleGanancia.objects.filter(
+            fecha_venta__gte=fecha_inicio,
+            fecha_venta__lte=fecha_fin,
+            venta__status__vent_cancelada=False
+        ).values(
+            'venta__empleado__nombre',
+            'venta__empleado__apellido'
+        ).annotate(
+            total_ganancia=Sum('ganancia_total'),
+            total_ventas=Count('venta', distinct=True),
+            margen_promedio=Avg('margen_porcentaje')
+        ).order_by('-total_ganancia')
+        
+        context['ganancias_por_empleado'] = ganancias_por_empleado
+        
+        return context
 
 class UserProfileUpdateView(LoginRequiredMixin, UpdateView):
     model = Empleado
