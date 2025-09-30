@@ -753,53 +753,54 @@ class Ventas(models.Model):
             promedio=models.Avg('margen_porcentaje')
         )['promedio'] or 0
     
-def actualizar_stock_inteligente(self, detalles_anteriores, detalles_nuevos):
-    """
-    Actualiza el stock de manera inteligente - OPTIMIZADO
-    """
-    from django.db import transaction
-    from decimal import Decimal
-    
-    with transaction.atomic():
-        # ✅ OBTENER TODOS LOS PRODUCTOS DE UNA VEZ CON BLOQUEO
-        productos_afectados = set(detalles_anteriores.keys()) | set(detalles_nuevos.keys())
-        
-        # select_for_update() bloquea las filas hasta que termine la transacción
-        productos_dict = {
-            str(p.id): p 
-            for p in Producto.objects.select_for_update().filter(
-                id__in=productos_afectados
-            )
-        }
-        
-        # ✅ PREPARAR TODAS LAS ACTUALIZACIONES
-        productos_a_actualizar = []
-        
-        for producto_id in productos_afectados:
-            producto = productos_dict.get(producto_id)
-            if not producto:
-                continue
-                
-            cantidad_anterior = Decimal(str(detalles_anteriores.get(producto_id, 0)))
-            cantidad_nueva = Decimal(str(detalles_nuevos.get(producto_id, 0)))
-            diferencia = cantidad_nueva - cantidad_anterior
-            
-            if diferencia != 0:
-                # Validar stock suficiente
+    def actualizar_stock_inteligente(self, detalles_anteriores, detalles_nuevos):
+        """
+        Actualiza el stock de manera inteligente - OPTIMIZADO PARA SQLITE
+        """
+        from django.db import transaction
+        from decimal import Decimal
+
+        with transaction.atomic():
+            # ✅ OBTENER PRODUCTOS SIN BLOQUEO (SQLite no soporta select_for_update bien)
+            productos_afectados = set(detalles_anteriores.keys()) | set(detalles_nuevos.keys())
+
+            # Obtener productos sin bloqueo
+            productos_dict = {
+                str(p.id): p
+                for p in Producto.objects.filter(id__in=productos_afectados)
+            }
+
+            # ✅ VALIDAR STOCK PRIMERO (antes de actualizar)
+            for producto_id in productos_afectados:
+                producto = productos_dict.get(producto_id)
+                if not producto:
+                    continue
+
+                cantidad_anterior = Decimal(str(detalles_anteriores.get(producto_id, 0)))
+                cantidad_nueva = Decimal(str(detalles_nuevos.get(producto_id, 0)))
+                diferencia = cantidad_nueva - cantidad_anterior
+
                 if diferencia > 0 and producto.stock < diferencia:
                     raise ValueError(
                         f"Stock insuficiente para {producto.nombre}. "
                         f"Disponible: {producto.stock}, Requerido: {diferencia}"
                     )
-                
-                producto.stock -= diferencia
-                productos_a_actualizar.append(producto)
-                
-                print(f"DEBUG: {producto.nombre} - Stock nuevo: {producto.stock}")
-        
-        # ✅ ACTUALIZAR TODOS EN BATCH
-        if productos_a_actualizar:
-            Producto.objects.bulk_update(productos_a_actualizar, ['stock'])    
+
+            # ✅ ACTUALIZAR UNO POR UNO (más seguro en SQLite)
+            for producto_id in productos_afectados:
+                producto = productos_dict.get(producto_id)
+                if not producto:
+                    continue
+
+                cantidad_anterior = Decimal(str(detalles_anteriores.get(producto_id, 0)))
+                cantidad_nueva = Decimal(str(detalles_nuevos.get(producto_id, 0)))
+                diferencia = cantidad_nueva - cantidad_anterior
+
+                if diferencia != 0:
+                    producto.stock -= diferencia
+                    producto.save(update_fields=['stock'])
+                    
+                    print(f"DEBUG: {producto.nombre} - Stock nuevo: {producto.stock}")    
 
 class PagoVenta(models.Model):
     METODOS_PAGO_CHOICES = [
